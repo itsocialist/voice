@@ -1,0 +1,38 @@
+{
+  "name": "@briandawson/voice",
+  "version": "0.1.0",
+  "description": "Multi-provider voice library: ElevenLabs, Fish Audio, OpenAI TTS, Deepgram STT, ElevenLabs ConvAI",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./next": "./next/index.ts",
+    "./react": "./react/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "keywords": ["voice", "tts", "stt", "elevenlabs", "fish-audio", "deepgram", "convai"],
+  "license": "MIT",
+  "peerDependencies": {
+    "next": ">=14.0.0",
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "next": { "optional": true },
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "@elevenlabs/client": "^0.15.2",
+    "@elevenlabs/react": "^0.14.3"
+  }
+}
