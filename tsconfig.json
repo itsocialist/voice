@@ -18,6 +18,6 @@
       "@briandawson/voice/react": ["./react/index.ts"]
     }
   },
-  "include": ["src/**/*", "next/**/*", "react/**/*"],
+  "include": ["src/**/*", "next/**/*", "react/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -20,7 +20,9 @@
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest"
+    "test": "vitest",
+    "test:run": "vitest run",
+    "check": "npx tsx scripts/check-providers.ts"
   },
   "keywords": [
     "voice", "tts", "stt", "text-to-speech", "speech-to-text",
