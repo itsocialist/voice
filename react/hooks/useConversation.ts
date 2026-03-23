@@ -15,7 +15,7 @@
  *     buildConfig: () => ({
  *       systemPrompt: '...',
  *       firstMessage: 'Hello!',
- *       voiceId: 'EXAVITQu4vr4xnSDxMaL',
+ *       voiceId: 'YOUR_ELEVENLABS_VOICE_ID',
  *       agentName: 'Assistant',
  *     }),
  *     onMessage: (role, text) => console.log(role, text),

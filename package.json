@@ -1,19 +1,32 @@
 {
-  "name": "@briandawson/voice",
+  "name": "@itsocialist/voice",
   "version": "0.1.0",
-  "description": "Multi-provider voice library: ElevenLabs, Fish Audio, OpenAI TTS, Deepgram STT, ElevenLabs ConvAI",
+  "description": "Multi-provider voice library for Next.js: ElevenLabs, Fish Audio, OpenAI TTS, Deepgram STT, and ElevenLabs ConvAI — with React hooks and drop-in route handlers",
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
     "./next": "./next/index.ts",
     "./react": "./react/index.ts"
   },
+  "homepage": "https://github.com/itsocialist/voice",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/itsocialist/voice.git"
+  },
+  "bugs": {
+    "url": "https://github.com/itsocialist/voice/issues"
+  },
+  "author": "itsocialist",
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest"
   },
-  "keywords": ["voice", "tts", "stt", "elevenlabs", "fish-audio", "deepgram", "convai"],
+  "keywords": [
+    "voice", "tts", "stt", "text-to-speech", "speech-to-text",
+    "elevenlabs", "fish-audio", "openai", "deepgram",
+    "convai", "conversational-ai", "next.js", "react", "nextjs"
+  ],
   "license": "MIT",
   "peerDependencies": {
     "next": ">=14.0.0",

@@ -17,8 +17,8 @@ import type { VoiceProfile } from '../types';
 // Uses the most common/free voice IDs for each provider.
 export const DEFAULT_VOICE_PROFILE: VoiceProfile = {
   name: 'Default',
-  elevenlabsVoiceId: 'EXAVITQu4vr4xnSDxMaL', // Sarah — ElevenLabs free voice
-  fishModelId: '7f92f8afb8ec43bf81429cc1c9199cb1',
+  elevenlabsVoiceId: 'EXAVITQu4vr4xnSDxMaL', // "Sarah" — ElevenLabs free/public voice
+  fishModelId: 'YOUR_FISH_MODEL_ID',           // replace with a Fish Audio reference model ID
   openaiVoice: 'nova',
   gender: 'female',
   ageRange: 'middle',
