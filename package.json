@@ -25,24 +25,40 @@
     "check": "npx tsx scripts/check-providers.ts"
   },
   "keywords": [
-    "voice", "tts", "stt", "text-to-speech", "speech-to-text",
-    "elevenlabs", "fish-audio", "openai", "deepgram",
-    "convai", "conversational-ai", "next.js", "react", "nextjs"
+    "voice",
+    "tts",
+    "stt",
+    "text-to-speech",
+    "speech-to-text",
+    "elevenlabs",
+    "fish-audio",
+    "openai",
+    "deepgram",
+    "convai",
+    "conversational-ai",
+    "next.js",
+    "react",
+    "nextjs"
   ],
   "license": "MIT",
   "peerDependencies": {
-    "next": ">=14.0.0",
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
   },
   "peerDependenciesMeta": {
-    "next": { "optional": true },
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "next": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
     "@types/node": "^20.0.0",
+    "@types/react": "^19.0.0",
     "typescript": "^5.0.0",
     "vitest": "^2.0.0"
   },

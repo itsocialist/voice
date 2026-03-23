@@ -12,11 +12,17 @@
  *   export const { POST, GET } = createTTSHandler({ registry: myRegistry })
  */
 
-import type { NextRequest } from 'next/server';
 import { synthesizeSpeech, getProviderStatus } from '../src/router/tts';
 import { voiceRegistry } from '../src/profiles/registry';
 import type { VoiceRegistry } from '../src/profiles/registry';
 import type { TTSRouteBody, TTSProviderName } from '../src/types';
+
+function json(data: unknown, init?: ResponseInit): Response {
+  return new Response(JSON.stringify(data), {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+  });
+}
 
 interface TTSHandlerOptions {
   /** Registry to use for profile lookup. Defaults to the global singleton. */
@@ -26,7 +32,7 @@ interface TTSHandlerOptions {
 export function createTTSHandler(options: TTSHandlerOptions = {}) {
   const registry = options.registry ?? voiceRegistry;
 
-  async function POST(request: NextRequest) {
+  async function POST(request: Request) {
     try {
       const body: TTSRouteBody = await request.json();
       const { text, profileKey, voiceProfile: explicitProfile, provider, format } = body;
