@@ -43,7 +43,7 @@ export async function createConvAIAgent(
         },
         tts: {
           voice_id: config.voiceId,
-          model_id: 'eleven_turbo_v2', // ConvAI constraint: only turbo_v2 or flash_v2
+          model_id: 'eleven_turbo_v2_5', // Upgraded to v2.5 for faster TTFA
           stability: 0.4,
           similarity_boost: 0.75,
         },
@@ -58,23 +58,20 @@ export async function createConvAIAgent(
 
   const { agent_id: agentId } = await agentRes.json();
 
-  // Step 2: Try to get conversation token (newer WebRTC API)
+  // Step 2 & 3: Get token and signed URL in parallel to reduce setup latency
   let conversationToken: string | undefined;
-  const tokenRes = await fetch(
-    `${ELEVENLABS_API}/convai/conversation/token?agent_id=${agentId}`,
-    { method: 'GET', headers: { 'xi-api-key': key } }
-  );
+  let signedUrl: string | undefined;
+
+  const [tokenRes, signedRes] = await Promise.all([
+    fetch(`${ELEVENLABS_API}/convai/conversation/token?agent_id=${agentId}`, { method: 'GET', headers: { 'xi-api-key': key } }),
+    fetch(`${ELEVENLABS_API}/convai/conversation/get_signed_url?agent_id=${agentId}`, { method: 'GET', headers: { 'xi-api-key': key } })
+  ]);
+
   if (tokenRes.ok) {
     const tokenData = await tokenRes.json();
     conversationToken = tokenData.token;
   }
 
-  // Step 3: Try to get signed URL (legacy WebSocket API)
-  let signedUrl: string | undefined;
-  const signedRes = await fetch(
-    `${ELEVENLABS_API}/convai/conversation/get_signed_url?agent_id=${agentId}`,
-    { method: 'GET', headers: { 'xi-api-key': key } }
-  );
   if (signedRes.ok) {
     const signedData = await signedRes.json();
     signedUrl = signedData.signed_url;
