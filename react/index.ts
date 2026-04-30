@@ -10,6 +10,9 @@ export type { UseSTTOptions, UseSTTResult, STTState, STTMode } from './hooks/use
 export { useConversation } from './hooks/useConversation';
 export type { UseConversationOptions, UseConversationResult, ConversationStatus } from './hooks/useConversation';
 
+export { useVoiceDuplex } from './hooks/useVoiceDuplex';
+export type { UseVoiceDuplexOptions, UseVoiceDuplexResult, UseVoiceDuplexProvider } from './hooks/useVoiceDuplex';
+
 // Components
 export { AudioPlayer } from './components/AudioPlayer';
 export type { AudioPlayerProps } from './components/AudioPlayer';

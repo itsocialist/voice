@@ -127,6 +127,11 @@ export interface ConvAIAgentConfig {
   /** ElevenLabs voice ID */
   voiceId: string;
   agentName: string;
+  /**
+   * Max conversation duration in seconds.
+   * ElevenLabs default is 600s (10 min). SpeakerHero uses 3600s (1 hour).
+   */
+  maxDurationSeconds?: number;
 }
 
 export interface ConvAIAgentResult {

@@ -38,6 +38,8 @@ export async function createConvAIAgent(
         agent: {
           prompt: { prompt: config.systemPrompt },
           first_message: config.firstMessage,
+          // max_duration_seconds: SpeakerHero uses 3600 (1hr). ElevenLabs default is 600s (10min).
+          max_duration_seconds: config.maxDurationSeconds ?? 3600,
         },
         tts: {
           voice_id: config.voiceId,
