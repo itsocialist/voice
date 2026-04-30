@@ -1,0 +1,7 @@
+{
+  "name": "@itsocialist/voice",
+  "type": "unknown",
+  "port": 3654,
+  "startCmd": "node index.js",
+  "buildCmd": "npm run build"
+}

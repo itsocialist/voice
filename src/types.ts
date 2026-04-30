@@ -61,6 +61,13 @@ export interface TTSResponse {
   latencyMs: number;
 }
 
+/** Returned by synthesizeStream() — stream starts before full synthesis */
+export interface TTSStreamResponse {
+  stream: ReadableStream<Uint8Array>;
+  contentType: string;
+  provider: TTSProviderName;
+}
+
 /** Returned when preferredProvider === 'browser' */
 export interface BrowserTTSSignal {
   useBrowserTTS: true;
@@ -70,6 +77,8 @@ export interface BrowserTTSSignal {
 export interface TTSProvider {
   name: TTSProviderName;
   synthesize(request: TTSRequest): Promise<TTSResponse>;
+  /** Optional: stream audio chunks as they arrive (lower TTFA) */
+  synthesizeStream?(request: TTSRequest): Promise<TTSStreamResponse>;
   isAvailable(): boolean;
 }
 

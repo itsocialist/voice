@@ -8,6 +8,7 @@ export type {
   VoiceProfile,
   TTSRequest,
   TTSResponse,
+  TTSStreamResponse,
   BrowserTTSSignal,
   TTSProvider,
   STTRequest,
@@ -21,6 +22,7 @@ export type {
   STTRouteResponse,
   ConvAIAgentRouteBody,
 } from './types';
+
 
 // TTS providers (for direct use if needed)
 export { ElevenLabsProvider } from './providers/tts/elevenlabs';
