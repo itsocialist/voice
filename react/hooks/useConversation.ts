@@ -1,30 +1,5 @@
 'use client';
 
-/**
- * useConversation — Generic ElevenLabs ConvAI hook
- *
- * Handles the full lifecycle:
- *   idle → connecting → connected → (agent speaking ↔ user speaking) → disconnected
- *
- * The app provides a function to build the agent config (system prompt, first
- * message, voice ID) — this hook handles agent creation, SDK connection, and cleanup.
- *
- * Usage:
- *   const conv = useConversation({
- *     agentRoute: '/api/convai/agent',
- *     buildConfig: () => ({
- *       systemPrompt: '...',
- *       firstMessage: 'Hello!',
- *       voiceId: 'YOUR_ELEVENLABS_VOICE_ID',
- *       agentName: 'Assistant',
- *     }),
- *     onMessage: (role, text) => console.log(role, text),
- *   })
- *
- *   <button onClick={conv.start}>Start</button>
- *   <button onClick={conv.stop}>Stop</button>
- */
-
 import { useState, useRef, useCallback } from 'react';
 import { useConversation as useElevenLabsConversation } from '@elevenlabs/react';
 import type { ConvAIAgentConfig } from '../../src/types';
@@ -39,29 +14,22 @@ export type ConversationStatus =
   | 'error';
 
 export interface UseConversationOptions {
-  /** Route that creates the ephemeral agent. Defaults to '/api/convai/agent' */
   agentRoute?: string;
-  /**
-   * Called before connecting — return the agent config.
-   * Can be async (e.g., to fetch scenario data).
-   */
   buildConfig: () => ConvAIAgentConfig | Promise<ConvAIAgentConfig>;
-  /** Called when the agent or user speaks */
   onMessage?: (role: 'agent' | 'user', text: string) => void;
-  /** Called when status changes */
   onStatusChange?: (status: ConversationStatus) => void;
-  /** Called on unrecoverable error */
   onError?: (error: string) => void;
 }
 
 export interface UseConversationResult {
   status: ConversationStatus;
   isSpeaking: boolean;
-  /** 0.0–1.0 volume level of the agent's current speech */
   agentVolume: number;
   error: string | null;
   start: () => Promise<void>;
   stop: () => Promise<void>;
+  getInputByteFrequencyData?: () => Uint8Array;
+  getOutputByteFrequencyData?: () => Uint8Array;
 }
 
 export function useConversation(options: UseConversationOptions): UseConversationResult {
@@ -85,7 +53,6 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     [onStatusChange]
   );
 
-  // ElevenLabs SDK hook
   const elevenlabs = useElevenLabsConversation({
     onConnect: () => updateStatus('connected'),
     onDisconnect: () => {
@@ -98,8 +65,8 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     onModeChange: (props: { mode: 'speaking' | 'listening' }) => {
       updateStatus(props.mode === 'speaking' ? 'agent-speaking' : 'user-speaking');
     },
-    onError: (msg: string) => {
-      const err = typeof msg === 'string' ? msg : 'Conversation error';
+    onError: (msg: string | Error) => {
+      const err = typeof msg === 'string' ? msg : msg.message || 'Conversation error';
       setError(err);
       updateStatus('error');
       onError?.(err);
@@ -111,10 +78,7 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     updateStatus('connecting');
 
     try {
-      // 1. Build agent config from calling app
       const config = await buildConfig();
-
-      // 2. Create ephemeral agent via server route
       const res = await fetch(agentRoute, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,15 +93,13 @@ export function useConversation(options: UseConversationOptions): UseConversatio
       const data = await res.json();
       agentIdRef.current = data.agent_id;
 
-      // 3. Request mic access
       await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // 4. Connect via ElevenLabs SDK
-      // Prefer conversation_token (WebRTC) over signed_url (WebSocket)
       if (data.conversation_token) {
-        await elevenlabs.startSession({ conversationToken: data.conversation_token });
+        // startSession returns void in v1
+        elevenlabs.startSession({ conversationToken: data.conversation_token });
       } else if (data.signed_url) {
-        await elevenlabs.startSession({ signedUrl: data.signed_url });
+        elevenlabs.startSession({ signedUrl: data.signed_url });
       } else {
         throw new Error('No connection credentials returned from agent route');
       }
@@ -152,12 +114,11 @@ export function useConversation(options: UseConversationOptions): UseConversatio
   const stop = useCallback(async () => {
     updateStatus('disconnecting');
     try {
-      await elevenlabs.endSession();
+      elevenlabs.endSession();
     } catch {
       // Ignore errors on disconnect
     }
 
-    // Best-effort agent cleanup
     if (agentIdRef.current) {
       fetch(`${agentRoute}?agent_id=${agentIdRef.current}`, { method: 'DELETE' }).catch(() => {});
       agentIdRef.current = null;
@@ -169,9 +130,12 @@ export function useConversation(options: UseConversationOptions): UseConversatio
   return {
     status,
     isSpeaking: status === 'agent-speaking',
-    agentVolume: elevenlabs.isSpeaking ? 1 : 0,
+    // In v1, getOutputVolume returns number 0-1
+    agentVolume: elevenlabs.getOutputVolume ? elevenlabs.getOutputVolume() : (elevenlabs.isSpeaking ? 1 : 0),
     error,
     start,
     stop,
+    getInputByteFrequencyData: elevenlabs.getInputByteFrequencyData,
+    getOutputByteFrequencyData: elevenlabs.getOutputByteFrequencyData,
   };
 }

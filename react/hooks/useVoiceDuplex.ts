@@ -23,7 +23,7 @@
 import { useConversation } from './useConversation';
 import type { UseConversationOptions, UseConversationResult, ConversationStatus } from './useConversation';
 
-export type VoiceDuplexProvider = 'elevenlabs' | 'cartesia' | 'deepgram';
+export type VoiceDuplexProviderName = 'elevenlabs' | 'cartesia' | 'deepgram';
 
 export interface UseVoiceDuplexOptions extends UseConversationOptions {
     /**
@@ -32,7 +32,7 @@ export interface UseVoiceDuplexOptions extends UseConversationOptions {
      * for future provider switching without API changes.
      * @default 'elevenlabs'
      */
-    provider?: VoiceDuplexProvider;
+    provider?: VoiceDuplexProviderName;
 }
 
 export type { UseConversationResult as UseVoiceDuplexResult, ConversationStatus };
