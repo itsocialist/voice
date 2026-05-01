@@ -43,7 +43,7 @@ export async function createConvAIAgent(
         },
         tts: {
           voice_id: config.voiceId,
-          model_id: 'eleven_turbo_v2_5', // Upgraded to v2.5 for faster TTFA
+          model_id: 'eleven_turbo_v2', // ConvAI constraint: only turbo_v2 or flash_v2
           stability: 0.4,
           similarity_boost: 0.75,
         },
