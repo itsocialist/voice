@@ -36,14 +36,17 @@ export async function createConvAIAgent(
       name: config.agentName,
       conversation_config: {
         agent: {
-          prompt: { prompt: config.systemPrompt },
+          prompt: { 
+            prompt: config.systemPrompt,
+            llm: "gpt-4o-mini"
+          },
           first_message: config.firstMessage,
           // max_duration_seconds: SpeakerHero uses 3600 (1hr). ElevenLabs default is 600s (10min).
           max_duration_seconds: config.maxDurationSeconds ?? 3600,
         },
         tts: {
           voice_id: config.voiceId,
-          model_id: 'eleven_turbo_v2', // ConvAI constraint: only turbo_v2 or flash_v2
+          model_id: 'eleven_flash_v2_5', // Flash is optimized for ultra-low latency (~75ms)
           stability: 0.4,
           similarity_boost: 0.75,
         },

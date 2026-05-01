@@ -15,7 +15,8 @@
     "paths": {
       "@briandawson/voice": ["./src/index.ts"],
       "@briandawson/voice/next": ["./next/index.ts"],
-      "@briandawson/voice/react": ["./react/index.ts"]
+      "@briandawson/voice/react": ["./react/index.ts"],
+      "react": ["./node_modules/@types/react"]
     }
   },
   "include": ["src/**/*", "next/**/*", "react/**/*", "scripts/**/*"],
