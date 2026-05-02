@@ -11,8 +11,10 @@ import type { TTSProvider, TTSProviderName, TTSRequest, TTSResponse, TTSProvider
 import { ElevenLabsProvider } from '../providers/tts/elevenlabs';
 import { FishAudioProvider } from '../providers/tts/fish-audio';
 import { OpenAITTSProvider } from '../providers/tts/openai';
+import { CartesiaProvider } from '../providers/tts/cartesia';
+import { DeepgramTTSProvider } from '../providers/tts/deepgram';
 
-const FALLBACK_ORDER: TTSProviderName[] = ['elevenlabs', 'fish', 'openai'];
+const FALLBACK_ORDER: TTSProviderName[] = ['cartesia', 'elevenlabs', 'deepgram', 'fish', 'openai'];
 
 // Singleton provider map — instantiated once per server lifecycle
 let _providers: Map<TTSProviderName, TTSProvider> | null = null;
@@ -21,7 +23,9 @@ function getProviders(): Map<TTSProviderName, TTSProvider> {
   if (!_providers) {
     _providers = new Map();
     const candidates: TTSProvider[] = [
+      new CartesiaProvider(),
       new ElevenLabsProvider(),
+      new DeepgramTTSProvider(),
       new FishAudioProvider(),
       new OpenAITTSProvider(),
     ];
@@ -92,6 +96,62 @@ export async function synthesizeSpeech(request: TTSRequest): Promise<TTSResponse
   }
 
   throw lastError ?? new Error('All TTS providers failed');
+}
+
+/**
+ * Synthesize speech as a stream with automatic fallback.
+ * Falls back to buffered synthesis if the provider doesn't support streaming natively.
+ */
+export async function synthesizeSpeechStream(request: TTSRequest): Promise<import('../types').TTSStreamResponse> {
+  const providers = getProviders();
+  const primaryName = resolveProvider(providers, request.preferredProvider as TTSProviderName | undefined);
+  const fallbacks = FALLBACK_ORDER.filter(
+    (name) => name !== primaryName && providers.has(name)
+  );
+  const attemptOrder = [primaryName, ...fallbacks];
+
+  let lastError: Error | null = null;
+
+  for (const providerName of attemptOrder) {
+    const provider = providers.get(providerName);
+    if (!provider) continue;
+
+    try {
+      if (provider.synthesizeStream) {
+        const result = await provider.synthesizeStream(request);
+        if (providerName !== primaryName) {
+          console.warn(`[voice] Primary '${primaryName}' failed. Fell back to streaming '${providerName}'.`);
+        } else {
+          console.log(`[voice/tts/stream] ${providerName} — streaming initiated`);
+        }
+        return result;
+      } else {
+        // Fallback: provider doesn't natively stream, synthesize and wrap ArrayBuffer in stream
+        const result = await provider.synthesize(request);
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array(result.audioBuffer));
+            controller.close();
+          }
+        });
+        if (providerName !== primaryName) {
+          console.warn(`[voice] Primary '${primaryName}' failed. Fell back to buffered '${providerName}'.`);
+        } else {
+          console.log(`[voice/tts/stream] ${providerName} — buffered fallback initiated`);
+        }
+        return {
+          stream,
+          contentType: result.contentType,
+          provider: providerName,
+        };
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`[voice/tts/stream] ${providerName} failed:`, lastError.message);
+    }
+  }
+
+  throw lastError ?? new Error('All TTS providers failed to stream');
 }
 
 export function getProviderStatus(): TTSProviderStatus {

@@ -28,12 +28,14 @@ export type {
 export { ElevenLabsProvider } from './providers/tts/elevenlabs';
 export { FishAudioProvider } from './providers/tts/fish-audio';
 export { OpenAITTSProvider } from './providers/tts/openai';
+export { CartesiaProvider } from './providers/tts/cartesia';
+export { DeepgramTTSProvider } from './providers/tts/deepgram';
 
 // STT providers
 export { DeepgramSTTProvider } from './providers/stt/deepgram';
 
 // TTS router
-export { synthesizeSpeech, getProviderStatus, resetProviders } from './router/tts';
+export { synthesizeSpeech, synthesizeSpeechStream, getProviderStatus, resetProviders } from './router/tts';
 
 // STT router
 export { transcribeAudio, getSTTStatus } from './router/stt';

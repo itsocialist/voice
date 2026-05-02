@@ -4,7 +4,7 @@
 
 // ── Provider Names ──
 
-export type TTSProviderName = 'elevenlabs' | 'fish' | 'openai';
+export type TTSProviderName = 'elevenlabs' | 'fish' | 'openai' | 'cartesia' | 'deepgram';
 export type STTProviderName = 'webspeech' | 'deepgram';
 
 // ── Voice Profile ──
@@ -19,6 +19,8 @@ export interface VoiceProfile {
   elevenlabsVoiceId: string;
   fishModelId: string;
   openaiVoice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+  cartesiaVoiceId?: string;
+  deepgramVoiceId?: string;
 
   // Metadata
   gender: 'male' | 'female';
