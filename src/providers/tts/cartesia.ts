@@ -58,68 +58,41 @@ export class CartesiaProvider implements TTSProvider {
   async synthesizeStream(request: TTSRequest): Promise<TTSStreamResponse> {
     const { text, voiceProfile } = request;
     const voiceId = voiceProfile.cartesiaVoiceId || 'a0e99841-438c-4a64-b679-ae501e7d6091';
-    
-    // Generate context ID for continuation
-    const contextId = typeof crypto !== 'undefined' ? crypto.randomUUID() : Math.random().toString(36).substring(2);
 
-    let ws: WebSocket;
-    const stream = new ReadableStream<Uint8Array>({
-      start: (controller) => {
-        ws = new WebSocket(`wss://api.cartesia.ai/tts/websocket?api_key=${this.apiKey}&cartesia_version=${this.cartesiaVersion}`);
-        
-        ws.binaryType = 'arraybuffer';
-
-        ws.onopen = () => {
-          ws.send(JSON.stringify({
-            context_id: contextId,
-            model_id: 'sonic-english',
-            transcript: text,
-            voice: {
-              mode: 'id',
-              id: voiceId,
-            },
-            output_format: {
-              container: 'mp3',
-              encoding: 'mp3',
-              sample_rate: 44100,
-            },
-          }));
-        };
-
-        ws.onmessage = (event) => {
-          if (typeof event.data === 'string') {
-            const data = JSON.parse(event.data);
-            if (data.type === 'done') {
-              ws.close();
-              controller.close();
-            } else if (data.type === 'error') {
-              controller.error(new Error(`Cartesia WS error: ${data.error}`));
-              ws.close();
-            }
-          } else if (event.data instanceof ArrayBuffer) {
-            controller.enqueue(new Uint8Array(event.data));
-          }
-        };
-
-        ws.onerror = (e) => {
-          controller.error(new Error('Cartesia WebSocket Error'));
-        };
-
-        ws.onclose = () => {
-          // ensure controller is closed if not already
-          try { controller.close(); } catch (e) {}
-        };
+    const response = await fetch('https://api.cartesia.ai/tts/bytes', {
+      method: 'POST',
+      headers: {
+        'Cartesia-Version': this.cartesiaVersion,
+        'X-API-Key': this.apiKey,
+        'Content-Type': 'application/json',
       },
-      cancel() {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.close();
-        }
-      }
+      body: JSON.stringify({
+        model_id: 'sonic-english',
+        transcript: text,
+        voice: {
+          mode: 'id',
+          id: voiceId,
+        },
+        output_format: {
+          container: request.format === 'mp3' ? 'mp3' : 'raw',
+          encoding: request.format === 'mp3' ? 'mp3' : 'pcm_f32le',
+          sample_rate: 44100,
+        },
+      }),
     });
 
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new Error(`Cartesia TTS stream failed (${response.status}): ${errorText}`);
+    }
+
+    if (!response.body) {
+      throw new Error('Cartesia TTS stream: response body is null');
+    }
+
     return {
-      stream,
-      contentType: 'audio/mpeg',
+      stream: response.body,
+      contentType: request.format === 'mp3' ? 'audio/mpeg' : 'audio/pcm',
       provider: 'cartesia',
     };
   }
