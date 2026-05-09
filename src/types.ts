@@ -134,6 +134,16 @@ export interface ConvAIAgentConfig {
    * ElevenLabs default is 600s (10 min). SpeakerHero uses 3600s (1 hour).
    */
   maxDurationSeconds?: number;
+  /**
+   * ElevenLabs TTS model ID.
+   * @default 'eleven_v3_conversational' — Scribe v2 Realtime with emotional cues.
+   * Fallback options: 'eleven_flash_v2' (low latency), 'eleven_turbo_v2'.
+   */
+  modelId?: string;
+  /** TTS stability (0.0–1.0). v3 default: 0.5 (was 0.4 for flash_v2). */
+  stability?: number;
+  /** TTS similarity boost (0.0–1.0). Default: 0.75. */
+  similarityBoost?: number;
 }
 
 export interface ConvAIAgentResult {

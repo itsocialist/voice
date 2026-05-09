@@ -14,7 +14,8 @@ const ELEVENLABS_API = 'https://api.elevenlabs.io/v1';
  * Create an ephemeral ConvAI agent and return connection credentials.
  *
  * Notes:
- * - ConvAI TTS only accepts model_id: 'eleven_turbo_v2' or 'eleven_flash_v2'
+ * - ConvAI TTS accepts model_id: 'eleven_v3_conversational' (default, shipped Feb 2026),
+ *   'eleven_flash_v2', or 'eleven_turbo_v2'. v3 includes Scribe v2 Realtime emotional cues.
  * - voice_id in tts config (not in agent.prompt) is the correct placement
  * - Returns both signed_url and conversation_token; use whichever your SDK needs
  */
@@ -43,9 +44,14 @@ export async function createConvAIAgent(
         },
         tts: {
           voice_id: config.voiceId,
-          model_id: 'eleven_flash_v2', // Flash is optimized for ultra-low latency (~75ms)
-          stability: 0.4,
-          similarity_boost: 0.75,
+          // S12-VOICE: Upgraded from eleven_flash_v2 → eleven_v3_conversational
+          // per Voice Realism Engineering Report (May 9, 2026). v3 ships Scribe v2
+          // Realtime with emotional cues and improved turn-taking.
+          model_id: config.modelId ?? 'eleven_v3_conversational',
+          // Stability recalibrated for v3 response curve (was 0.4 for flash_v2).
+          // v3 reads stability differently — 0.5 gives natural variation without drift.
+          stability: config.stability ?? 0.5,
+          similarity_boost: config.similarityBoost ?? 0.75,
         },
       },
     }),
