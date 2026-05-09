@@ -124,8 +124,13 @@ export function useConversation(options: UseConversationOptions): UseConversatio
 
       // Request mic permission before connecting — getUserMedia must be called
       // from a user-gesture context. If denied, throw a clear error.
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      console.log('[voice-lib] Mic permission granted — calling startSession...');
+      // CRITICAL: Stop the stream immediately after permission check.
+      // The ElevenLabs SDK calls getUserMedia internally — on macOS Chrome,
+      // two concurrent streams cause the second to receive silence.
+      // See COE-S11-001 for the full post-mortem.
+      const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      permStream.getTracks().forEach(t => t.stop());
+      console.log('[voice-lib] Mic permission granted (stream released) — calling startSession...');
 
       // v1.3: startSession(HookOptions) — signedUrl is a TOP-LEVEL field, not nested
       if (data.signed_url) {
