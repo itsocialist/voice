@@ -97,7 +97,7 @@ export async function deleteConvAIAgent(
   await fetch(`${ELEVENLABS_API}/convai/agents/${agentId}`, {
     method: 'DELETE',
     headers: { 'xi-api-key': key },
-  }).catch(() => {}); // Swallow errors — cleanup is best-effort
+  }).catch(() => { }); // Swallow errors — cleanup is best-effort
 }
 
 /** Get a signed URL for an existing agent */
