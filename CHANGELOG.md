@@ -11,6 +11,46 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.1] — 2026-05-12
+
+### Summary
+
+Addresses SpeakerHero's round-2 briefing (RQ-08 partial, RQ-09 full). Two SDK quirks
+discovered during the feasibility pass and worked around inside the library so
+consumers no longer need to reach into `@elevenlabs/react` internals.
+
+### Added
+
+**React hooks (`@itsocialist/voice/react`)**
+
+- `useConversation` / `useVoiceDuplex` return `changeInputDevice(deviceId)` and
+  `changeOutputDevice(deviceId)` — direct forwards to the underlying SDK methods.
+  Lets consumers switch audio hardware mid-session without depending on
+  `@elevenlabs/react`'s `useConversationControls` (RQ-09).
+
+- Agent route may now return `conversation_token` (WebRTC transport) in addition
+  to `signed_url` (WebSocket transport). The hook selects the transport
+  automatically. `signed_url` still takes precedence if both are returned —
+  backward compatible with v0.2.0 consumers.
+
+### Fixed
+
+- **WebRTC initial mic track now gets correct audio constraints** (RQ-08, partial).
+  The `@elevenlabs/client` WebRTC path constructs the LiveKit `Room` with no
+  `audioCaptureDefaults`, so the first mic track inherits browser defaults —
+  producing sub-STT-threshold audio on built-in MacBook microphones. The SDK's
+  own `changeInputDevice` *does* apply correct constraints (echoCancellation,
+  noiseSuppression, autoGainControl, channelCount: 1), so `useConversation` now
+  auto-invokes it immediately after `onConnect` when both the transport is WebRTC
+  and `inputDeviceId` is set. WebSocket sessions are unaffected — the WebSocket
+  path already applies these constraints internally.
+
+  Full custom-constraints support requires an upstream SDK change to accept
+  `audioCaptureDefaults` on the `Room` constructor; an issue will be filed
+  against `@elevenlabs/client`.
+
+---
+
 ## [0.2.0] — 2026-05-09
 
 ### Summary
@@ -93,6 +133,7 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/itsocialist/voice/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/itsocialist/voice/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/itsocialist/voice/releases/tag/v0.1.0

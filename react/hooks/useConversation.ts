@@ -43,6 +43,15 @@ export interface UseConversationResult {
   micPermission: MicPermissionState;
   start: () => Promise<void>;
   stop: () => Promise<void>;
+  /**
+   * Switch the active microphone mid-session. On the WebRTC transport this
+   * also re-applies the SDK's audio constraints (echoCancellation,
+   * noiseSuppression, autoGainControl, channelCount: 1) — which the WebRTC
+   * path does NOT apply on its initial track. No-op when the session is idle.
+   */
+  changeInputDevice: (inputDeviceId: string) => Promise<void>;
+  /** Switch the active audio output device mid-session. No-op when idle. */
+  changeOutputDevice: (outputDeviceId: string) => Promise<void>;
   getInputByteFrequencyData?: () => Uint8Array;
   getOutputByteFrequencyData?: () => Uint8Array;
 }
@@ -62,6 +71,12 @@ export function useConversation(options: UseConversationOptions): UseConversatio
   const [error, setError] = useState<string | null>(null);
   const [micPermission, setMicPermission] = useState<MicPermissionState>('unknown');
   const agentIdRef = useRef<string | null>(null);
+  // Which SDK transport the active session is using. WebRTC initial mic track
+  // ignores constraint defaults; we re-apply via changeInputDevice in onConnect.
+  const transportRef = useRef<'websocket' | 'webrtc' | null>(null);
+  // Carry inputDeviceId into onConnect so the WebRTC auto-fix can use it.
+  // Stored in a ref so onConnect's identity stays stable.
+  const pendingInputDeviceIdRef = useRef<string | undefined>(undefined);
 
   // Keep callbacks in refs so hook options never need to change identity.
   // This prevents the ElevenLabs hook from being recreated on every parent render.
@@ -114,11 +129,24 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     onConnect: ({ conversationId }: { conversationId: string }) => {
       console.log('[voice-lib] onConnect — conversationId:', conversationId);
       updateStatus('connected');
+      // WebRTC initial mic track skips the SDK's defaultConstraints
+      // (echoCancellation, noiseSuppression, autoGainControl, channelCount:1).
+      // Post-connect changeInputDevice DOES apply them. Auto-fire it so
+      // consumers don't have to reach into the SDK manually.
+      const deviceId = pendingInputDeviceIdRef.current;
+      if (transportRef.current === 'webrtc' && deviceId) {
+        elevenRef.current.changeInputDevice({ inputDeviceId: deviceId })
+          .catch((err: unknown) => {
+            console.warn('[voice-lib] post-connect changeInputDevice failed:', err);
+          });
+      }
     },
     onDisconnect: () => {
       console.log('[voice-lib] onDisconnect');
       updateStatus('idle');
       agentIdRef.current = null;
+      transportRef.current = null;
+      pendingInputDeviceIdRef.current = undefined;
     },
     onMessage: (props: { message: string; source: 'ai' | 'user'; role?: 'agent' | 'user' }) => {
       // role is the current field; source is deprecated but kept for safety
@@ -177,16 +205,29 @@ export function useConversation(options: UseConversationOptions): UseConversatio
       permStream.getTracks().forEach(t => t.stop());
       console.log('[voice-lib] Mic permission granted (stream released) — calling startSession...');
 
-      // v1.3: startSession(HookOptions) — signedUrl is a TOP-LEVEL field, not nested
+      // Stash inputDeviceId for onConnect (WebRTC needs to re-apply post-connect).
+      pendingInputDeviceIdRef.current = inputDeviceId;
+
+      // v1.3: startSession(HookOptions) — { signedUrl } picks WebSocket, { conversationToken } picks WebRTC.
+      // Routes may return either; prefer signed_url for backward compatibility.
       if (data.signed_url) {
+        transportRef.current = 'websocket';
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (elevenRef.current.startSession as any)({
           signedUrl: data.signed_url,
           ...(inputDeviceId && { inputDeviceId }),
           ...(outputDeviceId && { outputDeviceId }),
         });
+      } else if (data.conversation_token) {
+        transportRef.current = 'webrtc';
+        // WebRTC ignores top-level inputDeviceId at init; onConnect re-applies via changeInputDevice.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (elevenRef.current.startSession as any)({
+          conversationToken: data.conversation_token,
+          ...(outputDeviceId && { outputDeviceId }),
+        });
       } else {
-        throw new Error('No signed_url returned from agent route');
+        throw new Error('Agent route returned neither signed_url nor conversation_token');
       }
       console.log('[voice-lib] startSession() resolved — awaiting onConnect callback...');
     } catch (err) {
@@ -211,8 +252,19 @@ export function useConversation(options: UseConversationOptions): UseConversatio
       agentIdRef.current = null;
     }
 
+    transportRef.current = null;
+    pendingInputDeviceIdRef.current = undefined;
     updateStatus('idle');
   }, [agentRoute, updateStatus]);
+
+  const changeInputDevice = useCallback(async (deviceId: string) => {
+    pendingInputDeviceIdRef.current = deviceId;
+    await elevenRef.current.changeInputDevice({ inputDeviceId: deviceId });
+  }, []);
+
+  const changeOutputDevice = useCallback(async (deviceId: string) => {
+    await elevenRef.current.changeOutputDevice({ outputDeviceId: deviceId });
+  }, []);
 
   return {
     status,
@@ -222,6 +274,8 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     micPermission,
     start,
     stop,
+    changeInputDevice,
+    changeOutputDevice,
     getInputByteFrequencyData: elevenRef.current.getInputByteFrequencyData,
     getOutputByteFrequencyData: elevenRef.current.getOutputByteFrequencyData,
   };
