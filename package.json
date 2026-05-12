@@ -17,6 +17,17 @@
     "url": "https://github.com/itsocialist/voice/issues"
   },
   "author": "itsocialist",
+  "files": [
+    "src/**/*.ts",
+    "!src/__tests__/**",
+    "next/**/*.ts",
+    "react/**/*.ts",
+    "react/**/*.tsx",
+    "agent.md",
+    "CHANGELOG.md",
+    "README.md",
+    "tsconfig.build.json"
+  ],
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",
