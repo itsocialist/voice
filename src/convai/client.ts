@@ -49,6 +49,44 @@ function buildTurnDetectionPayload(turnDetection?: ConvAIAgentConfig['turnDetect
   };
 }
 
+function isV3Model(modelId: string | undefined): boolean {
+  return (modelId ?? 'eleven_v3_conversational').startsWith('eleven_v3');
+}
+
+function normalizeAudioTags(
+  tags: ConvAIAgentConfig['suggestedAudioTags']
+): Array<{ tag: string; description?: string }> | undefined {
+  if (!tags || tags.length === 0) return undefined;
+  return tags.map(t => (typeof t === 'string' ? { tag: t } : t));
+}
+
+/**
+ * Build the `tts` payload sent to ElevenLabs, including the RQ-11
+ * expressive fields. `expressiveMode` defaults to `true` on v3 models per the
+ * SpeakerHero recommendation; ElevenLabs silently no-ops both fields on
+ * non-v3 models so passing them is safe.
+ */
+function buildTtsPayload(config: {
+  voiceId: string;
+  modelId?: string;
+  stability?: number;
+  similarityBoost?: number;
+  expressiveMode?: boolean;
+  suggestedAudioTags?: ConvAIAgentConfig['suggestedAudioTags'];
+}) {
+  const modelId = config.modelId ?? 'eleven_v3_conversational';
+  const expressiveMode = config.expressiveMode ?? isV3Model(modelId);
+  const normalizedTags = normalizeAudioTags(config.suggestedAudioTags);
+  return {
+    voice_id: config.voiceId,
+    model_id: modelId,
+    stability: config.stability ?? 0.5,
+    similarity_boost: config.similarityBoost ?? 0.75,
+    expressive_mode: expressiveMode,
+    ...(normalizedTags && { suggested_audio_tags: normalizedTags }),
+  };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
@@ -85,17 +123,10 @@ export async function createConvAIAgent(
           // max_duration_seconds: SpeakerHero uses 3600 (1hr). ElevenLabs default is 600s (10min).
           max_duration_seconds: config.maxDurationSeconds ?? 3600,
         },
-        tts: {
-          voice_id: config.voiceId,
-          // S12-VOICE: Upgraded from eleven_flash_v2 → eleven_v3_conversational
-          // per Voice Realism Engineering Report (May 9, 2026). v3 ships Scribe v2
-          // Realtime with emotional cues and improved turn-taking.
-          model_id: config.modelId ?? 'eleven_v3_conversational',
-          // Stability recalibrated for v3 response curve (was 0.4 for flash_v2).
-          // v3 reads stability differently — 0.5 gives natural variation without drift.
-          stability: config.stability ?? 0.5,
-          similarity_boost: config.similarityBoost ?? 0.75,
-        },
+        // S12-VOICE: default model eleven_v3_conversational (Scribe v2 Realtime,
+        // emotional cues). Stability 0.5 calibrated for v3 (was 0.4 for flash_v2).
+        // RQ-11: expressiveMode defaults true on v3; suggestedAudioTags forwarded as-is.
+        tts: buildTtsPayload(config),
         ...(turnPayload && { turn: turnPayload }),
       },
     }),
@@ -168,12 +199,7 @@ export async function resolveUniversalAgent(
           first_message: baseConfig.firstMessage,
           max_duration_seconds: baseConfig.maxDurationSeconds ?? 3600,
         },
-        tts: {
-          voice_id: baseConfig.voiceId,
-          model_id: baseConfig.modelId ?? 'eleven_v3_conversational',
-          stability: baseConfig.stability ?? 0.5,
-          similarity_boost: baseConfig.similarityBoost ?? 0.75,
-        },
+        tts: buildTtsPayload(baseConfig),
         ...(turnPayload && { turn: turnPayload }),
       },
     }),
@@ -214,8 +240,19 @@ export async function getSignedUrlWithOverrides(
       ...(overrides.firstMessage !== undefined && { first_message: overrides.firstMessage }),
     };
   }
+  const ttsOverride: Record<string, unknown> = {};
   if (overrides.voiceId !== undefined) {
-    conversationConfigOverride.tts = { voice_id: overrides.voiceId };
+    ttsOverride.voice_id = overrides.voiceId;
+  }
+  if (overrides.expressiveMode !== undefined) {
+    ttsOverride.expressive_mode = overrides.expressiveMode;
+  }
+  const normalizedTags = normalizeAudioTags(overrides.suggestedAudioTags);
+  if (normalizedTags) {
+    ttsOverride.suggested_audio_tags = normalizedTags;
+  }
+  if (Object.keys(ttsOverride).length > 0) {
+    conversationConfigOverride.tts = ttsOverride;
   }
   if (turnPayload) {
     conversationConfigOverride.turn = turnPayload;

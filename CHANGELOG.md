@@ -11,6 +11,46 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.2] — 2026-05-12
+
+### Summary
+
+Addresses SpeakerHero RQ-11. The ConvAI client now forwards
+`expressive_mode` and `suggested_audio_tags` to the ElevenLabs API. Together
+these eliminate the failure mode where v3 models invent emotional tags like
+`[interested]` / `[analytical]` and the bracketed strings get spoken aloud
+instead of being interpreted as performance cues. SpeakerHero can now retire
+its prompt-level "don't invent tags" instruction and the transcript regex scrub.
+
+### Added
+
+**ConvAI — server/Node**
+
+- `ConvAIAgentConfig.expressiveMode?: boolean` — enables ElevenLabs' expressive
+  audio-tag prompt augmentation. Defaults to `true` when `modelId` is a v3
+  family model (`eleven_v3*`), `false` otherwise. ElevenLabs silently no-ops
+  this field on non-v3 models, so passing it is always safe.
+
+- `ConvAIAgentConfig.suggestedAudioTags?: ConvAISuggestedAudioTag[]` —
+  constrains the LLM to a preferred set of audio tags (max 20). Each entry is
+  either a plain string (`"thoughtful"`) or an object with a usage hint
+  (`{ tag: "thoughtful", description: "When considering a tradeoff" }`).
+
+- Both fields also accepted as per-session overrides on
+  `ConvAISessionOverrides` (passed to `getSignedUrlWithOverrides`), and
+  forwarded through `ConvAIAgentRouteBody` so they propagate from the Next.js
+  route handler down to the API call.
+
+- `ConvAISuggestedAudioTag` type — `string | { tag: string; description?: string }`.
+
+### Changed
+
+- `createConvAIAgent` and `resolveUniversalAgent` now both share an internal
+  `buildTtsPayload` helper so the TTS request shape stays in sync across
+  call sites.
+
+---
+
 ## [0.2.1] — 2026-05-12
 
 ### Summary
@@ -133,7 +173,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/itsocialist/voice/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/itsocialist/voice/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/itsocialist/voice/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/itsocialist/voice/releases/tag/v0.1.0

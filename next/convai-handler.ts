@@ -38,6 +38,8 @@ export async function POST(request: Request) {
       similarityBoost,
       turnDetection,
       timeoutMs,
+      expressiveMode,
+      suggestedAudioTags,
     } = body;
 
     if (!systemPrompt || !firstMessage || !voiceId) {
@@ -56,6 +58,8 @@ export async function POST(request: Request) {
         similarityBoost,
         turnDetection,
         timeoutMs,
+        expressiveMode,
+        suggestedAudioTags,
       },
       apiKey
     );

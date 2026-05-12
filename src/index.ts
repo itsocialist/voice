@@ -20,6 +20,7 @@ export type {
   ConvAIAgentResult,
   ConvAITurnDetection,
   ConvAISessionOverrides,
+  ConvAISuggestedAudioTag,
   TTSRouteBody,
   STTRouteResponse,
   ConvAIAgentRouteBody,

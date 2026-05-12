@@ -158,7 +158,14 @@ interface ConvAIAgentConfig {
   similarityBoost?: number       // TTS similarity boost 0.0–1.0; default 0.75
   turnDetection?: ConvAITurnDetection
   timeoutMs?: number             // fetch timeout ms for all internal calls; default 15000
+  expressiveMode?: boolean       // v3-only; default true on v3 models, false otherwise.
+                                 // Enables expressive audio-tag interpretation.
+  suggestedAudioTags?: ConvAISuggestedAudioTag[]
+                                 // v3-only; max 20. Constrains LLM to a preferred tag set.
+                                 // Prevents invented bracket tags being spoken aloud.
 }
+
+type ConvAISuggestedAudioTag = string | { tag: string; description?: string }
 
 // Returned from createConvAIAgent and getSignedUrlWithOverrides
 interface ConvAIAgentResult {
@@ -173,6 +180,8 @@ interface ConvAISessionOverrides {
   firstMessage?: string
   voiceId?: string
   turnDetection?: ConvAITurnDetection
+  expressiveMode?: boolean
+  suggestedAudioTags?: ConvAISuggestedAudioTag[]
 }
 ```
 
@@ -200,6 +209,8 @@ interface ConvAIAgentRouteBody {
   similarityBoost?: number
   turnDetection?: ConvAITurnDetection
   timeoutMs?: number
+  expressiveMode?: boolean
+  suggestedAudioTags?: ConvAISuggestedAudioTag[]
 }
 
 interface STTRouteResponse {
@@ -507,7 +518,7 @@ export { convaiPost as POST, convaiDelete as DELETE } from '@itsocialist/voice/n
 
 Required fields: `systemPrompt`, `firstMessage`, `voiceId`
 
-Optional fields: `agentName`, `maxDurationSeconds`, `modelId`, `stability`, `similarityBoost`, `turnDetection`, `timeoutMs`
+Optional fields: `agentName`, `maxDurationSeconds`, `modelId`, `stability`, `similarityBoost`, `turnDetection`, `timeoutMs`, `expressiveMode`, `suggestedAudioTags`
 
 Response: `{ agent_id: string, conversation_token?: string, signed_url?: string }`
 

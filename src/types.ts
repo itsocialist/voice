@@ -132,6 +132,13 @@ export interface ConvAITurnDetection {
   threshold?: number;
 }
 
+/**
+ * Audio tag entry for `suggestedAudioTags`. A plain string is shorthand for
+ * `{ tag }`; objects let you attach a usage hint that the LLM can use to
+ * decide when to apply the tag.
+ */
+export type ConvAISuggestedAudioTag = string | { tag: string; description?: string };
+
 export interface ConvAIAgentConfig {
   systemPrompt: string;
   firstMessage: string;
@@ -157,6 +164,21 @@ export interface ConvAIAgentConfig {
   turnDetection?: ConvAITurnDetection;
   /** Timeout (ms) applied to all internal ElevenLabs fetch calls. Default: 15000. */
   timeoutMs?: number;
+  /**
+   * Enables expressive audio-tag prompt augmentation in the LLM and TTS-side
+   * tag interpretation. Defaults to `true` when `modelId` is a v3 family model
+   * (`eleven_v3*`), `false` otherwise. ElevenLabs silently disables this on
+   * non-v3 models regardless of the value sent.
+   */
+  expressiveMode?: boolean;
+  /**
+   * Constrains the LLM to prefer this set of audio tags when adding inflection.
+   * Up to 20 tags. Reduces the failure mode where the model invents tags like
+   * `[interested]` / `[analytical]` and those bracketed strings get spoken
+   * aloud instead of being interpreted as performance cues. Plain strings are
+   * sent as-is; objects let you attach a `description` usage hint.
+   */
+  suggestedAudioTags?: ConvAISuggestedAudioTag[];
 }
 
 export interface ConvAIAgentResult {
@@ -176,6 +198,8 @@ export interface ConvAISessionOverrides {
   firstMessage?: string;
   voiceId?: string;
   turnDetection?: ConvAITurnDetection;
+  expressiveMode?: boolean;
+  suggestedAudioTags?: ConvAISuggestedAudioTag[];
 }
 
 // ── Next.js Route Handler Types ──
@@ -209,4 +233,6 @@ export interface ConvAIAgentRouteBody {
   similarityBoost?: number;
   turnDetection?: ConvAITurnDetection;
   timeoutMs?: number;
+  expressiveMode?: boolean;
+  suggestedAudioTags?: ConvAISuggestedAudioTag[];
 }
