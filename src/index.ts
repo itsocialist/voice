@@ -18,6 +18,8 @@ export type {
   STTProviderStatus,
   ConvAIAgentConfig,
   ConvAIAgentResult,
+  ConvAITurnDetection,
+  ConvAISessionOverrides,
   TTSRouteBody,
   STTRouteResponse,
   ConvAIAgentRouteBody,
@@ -44,4 +46,11 @@ export { transcribeAudio, getSTTStatus } from './router/stt';
 export { VoiceRegistry, voiceRegistry, DEFAULT_VOICE_PROFILE } from './profiles/registry';
 
 // ConvAI
-export { createConvAIAgent, deleteConvAIAgent, getSignedUrl } from './convai/client';
+export {
+  createConvAIAgent,
+  resolveUniversalAgent,
+  getSignedUrlWithOverrides,
+  deleteConvAIAgent,
+  getSignedUrl,
+  ConvAIError,
+} from './convai/client';

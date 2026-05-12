@@ -1,0 +1,98 @@
+# Changelog
+
+All notable changes to `@itsocialist/voice` are documented here.
+
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [Unreleased]
+
+---
+
+## [0.2.0] — 2026-05-09
+
+### Summary
+
+This release addresses all six requests filed by SpeakerHero (2026-05-09) and adds audio hardware device selection. The headline change is a new **universal agent + signed-URL override** pattern that reduces per-session ConvAI startup from ~700ms to ~200ms and eliminates the need for direct ElevenLabs API calls in consuming apps. Typed error classes, configurable timeouts, VAD turn detection, and live mic permission monitoring round out the P0–P2 items.
+
+### Added
+
+**ConvAI — server/Node (`@itsocialist/voice`)**
+
+- `resolveUniversalAgent(name, baseConfig, apiKey?)` — creates a long-lived universal agent once at server boot; returns `agentId` for the caller to cache. Designed for module-scope lazy initialization (`agentIdPromise ??= resolveUniversalAgent(...)`).
+
+- `getSignedUrlWithOverrides(agentId, overrides, apiKey?)` — fetches a signed URL for an existing universal agent with per-session `ConvAISessionOverrides` (1 ElevenLabs API call, ~200ms). Replaces the 3-call `createConvAIAgent` pattern in high-concurrency routes.
+
+- `ConvAISessionOverrides` interface — `{ systemPrompt?, firstMessage?, voiceId?, turnDetection? }` passed to `getSignedUrlWithOverrides`.
+
+- `ConvAIError` class — typed error with `code: 'API_KEY_MISSING' | 'AGENT_CREATION_FAILED' | 'SIGNED_URL_FAILED' | 'ELEVENLABS_UNAVAILABLE' | 'OVERRIDE_FAILED'` and optional upstream `status: number`. All ConvAI functions now throw `ConvAIError` instead of plain `Error`, enabling clean HTTP status mapping in route handlers.
+
+- `ConvAITurnDetection` interface — `{ type: 'server_vad', silence_duration_ms?, threshold? }`. Reduces perceived turn-handoff latency by ~300ms when `silence_duration_ms: 400`.
+
+- `ConvAIAgentConfig.turnDetection` — VAD config applied at agent creation.
+
+- `ConvAIAgentConfig.timeoutMs` — `AbortSignal.timeout()` applied to every internal `fetch()` call. Default `15000`. Prevents indefinite Vercel function hangs when ElevenLabs is slow.
+
+- `deleteConvAIAgent` `options.onError` — optional `(err: Error) => void` callback instead of silent swallow. Callers that want best-effort behavior pass nothing; callers that want cleanup visibility pass a logger.
+
+- `ConvAISessionOverrides`, `ConvAITurnDetection` exported from `@itsocialist/voice`.
+
+- `ConvAIError` exported from `@itsocialist/voice`.
+
+**React hooks (`@itsocialist/voice/react`)**
+
+- `useConversation` / `useVoiceDuplex` return `micPermission: 'granted' | 'denied' | 'prompt' | 'unknown'` — subscribes to `navigator.permissions.query({ name: 'microphone' }).onchange` on mount; detects OS-level mic revocation during active sessions. No-ops safely on Safari iOS.
+
+- `useConversation` / `useVoiceDuplex` options accept `inputDeviceId?: string` and `outputDeviceId?: string` — audio hardware device selection. `inputDeviceId` is passed to `getUserMedia` and forwarded to ElevenLabs SDK `startSession`. Enumerate devices with `navigator.mediaDevices.enumerateDevices()` after `micPermission === 'granted'`.
+
+- `MicPermissionState` type exported from `@itsocialist/voice/react` (also as `VoiceDuplexMicPermission` from the `useVoiceDuplex` re-export).
+
+**Next.js handler (`@itsocialist/voice/next`)**
+
+- `ConvAIAgentRouteBody` extended with all optional `ConvAIAgentConfig` fields: `maxDurationSeconds`, `modelId`, `stability`, `similarityBoost`, `turnDetection`, `timeoutMs`. All are forwarded to `createConvAIAgent`.
+
+- ConvAI handler now catches `ConvAIError` and maps `code` → HTTP status (`ELEVENLABS_UNAVAILABLE` → 503, `API_KEY_MISSING` → 500, others → upstream status or 500). Error response includes `code` field.
+
+- ConvAI DELETE handler now passes `onError` to `deleteConvAIAgent` and logs cleanup failures via `console.warn`.
+
+**Documentation**
+
+- `agent.md` — machine-readable LLM reference covering all exported symbols, types, defaults, constraints, both agent lifecycle patterns, and known limitations. Intended to be committed and updated alongside code.
+
+### Fixed
+
+- `voice-demo` `app/layout.tsx` missing `VoiceDuplexProvider` wrapper — caused 500 on all ConvAI page loads.
+
+---
+
+## [0.1.0] — 2026-04-xx
+
+Initial public release.
+
+### Added
+
+- **TTS** — multi-provider synthesis: ElevenLabs, Fish Audio, OpenAI TTS, Cartesia, Deepgram, Browser Web Speech
+- **TTS streaming** — `synthesizeSpeechStream()` / `synthesizeStream()` on providers that support it (Cartesia REST stream, ElevenLabs)
+- **STT** — Deepgram server-side and Browser Web Speech API
+- **ConvAI** — ElevenLabs ConvAI full-duplex real-time conversation via WebSocket / WebRTC
+  - `createConvAIAgent()` — ephemeral agent per session
+  - `deleteConvAIAgent()` — best-effort cleanup
+  - `getSignedUrl()` — signed URL for existing agent
+  - Parallel token + signed URL fetch to minimize setup latency
+  - TTS model: `eleven_v3_conversational` (Scribe v2 Realtime with emotional cues, upgraded May 2026)
+- **VoiceRegistry** — maps named voice identities across all TTS providers with fuzzy matching; global singleton + custom instance
+- **`DEFAULT_VOICE_PROFILE`** — fallback profile when registry key is not found
+- **Next.js App Router handlers** — drop-in `route.ts` exports for TTS (`POST`, `GET`), STT (`POST`, `GET`), ConvAI (`POST`, `DELETE`)
+- **`createTTSHandler({ registry })`** — factory for custom registry injection
+- **React hooks** — `useVoice`, `useSTT`, `useConversation`, `useVoiceDuplex`
+- **React components** — `<AudioPlayer />`, `<VoiceInput />`, `<VoiceDuplexProvider />`
+- **`useVoiceDuplex`** — provider-agnostic abstraction over `useConversation`; `provider` param reserved for future Cartesia / Deepgram swap
+- **macOS dual-stream fix** — `getUserMedia` permission check stream stopped before ElevenLabs SDK stream opens (COE-S11-001)
+- **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
+- TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
+
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/itsocialist/voice/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/itsocialist/voice/releases/tag/v0.1.0

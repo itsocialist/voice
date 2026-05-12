@@ -16,12 +16,15 @@
  *     agentRoute: '/api/convai/agent',
  *     buildConfig: () => ({ systemPrompt, firstMessage, voiceId }),
  *     onMessage: (role, text) => ...,
+ *     inputDeviceId: selectedMicId,   // optional H/W selection
+ *     outputDeviceId: selectedSpeakerId,
  *   });
  *   <button onClick={conv.start}>Start</button>
+ *   if (conv.micPermission === 'denied') return <MicBlockedScreen />;
  */
 
 import { useConversation } from './useConversation';
-import type { UseConversationOptions, UseConversationResult, ConversationStatus } from './useConversation';
+import type { UseConversationOptions, UseConversationResult, ConversationStatus, MicPermissionState } from './useConversation';
 
 export type VoiceDuplexProviderName = 'elevenlabs' | 'cartesia' | 'deepgram';
 
@@ -35,7 +38,7 @@ export interface UseVoiceDuplexOptions extends UseConversationOptions {
     provider?: VoiceDuplexProviderName;
 }
 
-export type { UseConversationResult as UseVoiceDuplexResult, ConversationStatus };
+export type { UseConversationResult as UseVoiceDuplexResult, ConversationStatus, MicPermissionState };
 
 /**
  * useVoiceDuplex — provider-agnostic full-duplex voice conversation hook.

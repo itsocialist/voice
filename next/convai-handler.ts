@@ -4,12 +4,12 @@
  * Drop into app/api/convai/agent/route.ts:
  *   export { POST, DELETE } from '@itsocialist/voice/next/convai-handler'
  *
- * POST body: { systemPrompt, firstMessage, voiceId, agentName }
+ * POST body: { systemPrompt, firstMessage, voiceId, agentName, ...optional ConvAIAgentConfig fields }
  * POST response: { agent_id, conversation_token?, signed_url? }
  * DELETE ?agent_id=xxx → { ok: true }
  */
 
-import { createConvAIAgent, deleteConvAIAgent } from '../src/convai/client';
+import { createConvAIAgent, deleteConvAIAgent, ConvAIError } from '../src/convai/client';
 import type { ConvAIAgentRouteBody } from '../src/types';
 
 function json(data: unknown, init?: ResponseInit): Response {
@@ -27,14 +27,36 @@ export async function POST(request: Request) {
 
   try {
     const body: ConvAIAgentRouteBody = await request.json();
-    const { systemPrompt, firstMessage, voiceId, agentName } = body;
+    const {
+      systemPrompt,
+      firstMessage,
+      voiceId,
+      agentName,
+      maxDurationSeconds,
+      modelId,
+      stability,
+      similarityBoost,
+      turnDetection,
+      timeoutMs,
+    } = body;
 
     if (!systemPrompt || !firstMessage || !voiceId) {
       return json({ error: 'systemPrompt, firstMessage, and voiceId are required' }, { status: 400 });
     }
 
     const result = await createConvAIAgent(
-      { systemPrompt, firstMessage, voiceId, agentName: agentName ?? 'Agent' },
+      {
+        systemPrompt,
+        firstMessage,
+        voiceId,
+        agentName: agentName ?? 'Agent',
+        maxDurationSeconds,
+        modelId,
+        stability,
+        similarityBoost,
+        turnDetection,
+        timeoutMs,
+      },
       apiKey
     );
 
@@ -45,6 +67,15 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('[voice/convai] agent creation error:', error);
+
+    if (error instanceof ConvAIError) {
+      const httpStatus =
+        error.code === 'ELEVENLABS_UNAVAILABLE' ? 503
+        : error.code === 'API_KEY_MISSING' ? 500
+        : error.status ?? 500;
+      return json({ error: error.message, code: error.code }, { status: httpStatus });
+    }
+
     return json(
       { error: error instanceof Error ? error.message : 'Failed to create agent' },
       { status: 500 }
@@ -58,6 +89,8 @@ export async function DELETE(request: Request) {
     return json({ error: 'agent_id required' }, { status: 400 });
   }
 
-  await deleteConvAIAgent(agentId); // Best-effort; doesn't throw
+  await deleteConvAIAgent(agentId, {
+    onError: (e) => console.warn('[voice/convai] agent cleanup failed:', e),
+  });
   return json({ ok: true });
 }

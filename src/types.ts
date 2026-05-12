@@ -123,6 +123,15 @@ export interface STTProviderStatus {
 
 // ── ConvAI ──
 
+/** VAD turn detection config for ConvAI sessions. */
+export interface ConvAITurnDetection {
+  type: 'server_vad';
+  /** Silence duration before turn handoff (ms). ElevenLabs default ~700; recommend 400 for sales sims. */
+  silence_duration_ms?: number;
+  /** VAD sensitivity (0.0–1.0). */
+  threshold?: number;
+}
+
 export interface ConvAIAgentConfig {
   systemPrompt: string;
   firstMessage: string;
@@ -144,6 +153,10 @@ export interface ConvAIAgentConfig {
   stability?: number;
   /** TTS similarity boost (0.0–1.0). Default: 0.75. */
   similarityBoost?: number;
+  /** VAD turn detection config. Reduces perceived response latency. */
+  turnDetection?: ConvAITurnDetection;
+  /** Timeout (ms) applied to all internal ElevenLabs fetch calls. Default: 15000. */
+  timeoutMs?: number;
 }
 
 export interface ConvAIAgentResult {
@@ -152,6 +165,17 @@ export interface ConvAIAgentResult {
   signedUrl?: string;
   /** WebRTC conversation token (newer API) */
   conversationToken?: string;
+}
+
+/**
+ * Per-session overrides passed to getSignedUrlWithOverrides().
+ * Applied on top of a cached universal agent's base config.
+ */
+export interface ConvAISessionOverrides {
+  systemPrompt?: string;
+  firstMessage?: string;
+  voiceId?: string;
+  turnDetection?: ConvAITurnDetection;
 }
 
 // ── Next.js Route Handler Types ──
@@ -179,4 +203,10 @@ export interface ConvAIAgentRouteBody {
   firstMessage: string;
   voiceId: string;
   agentName: string;
+  maxDurationSeconds?: number;
+  modelId?: string;
+  stability?: number;
+  similarityBoost?: number;
+  turnDetection?: ConvAITurnDetection;
+  timeoutMs?: number;
 }

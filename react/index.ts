@@ -8,10 +8,10 @@ export { useSTT } from './hooks/useSTT';
 export type { UseSTTOptions, UseSTTResult, STTState, STTMode } from './hooks/useSTT';
 
 export { useConversation } from './hooks/useConversation';
-export type { UseConversationOptions, UseConversationResult, ConversationStatus } from './hooks/useConversation';
+export type { UseConversationOptions, UseConversationResult, ConversationStatus, MicPermissionState } from './hooks/useConversation';
 
 export { useVoiceDuplex } from './hooks/useVoiceDuplex';
-export type { UseVoiceDuplexOptions, UseVoiceDuplexResult, VoiceDuplexProviderName } from './hooks/useVoiceDuplex';
+export type { UseVoiceDuplexOptions, UseVoiceDuplexResult, VoiceDuplexProviderName, MicPermissionState as VoiceDuplexMicPermission } from './hooks/useVoiceDuplex';
 
 // Components
 export { VoiceDuplexProvider } from './components/VoiceDuplexProvider';

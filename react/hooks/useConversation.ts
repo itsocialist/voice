@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useConversation as useElevenLabsConversation } from '@elevenlabs/react';
 import type { ConvAIAgentConfig } from '../../src/types';
 
@@ -13,12 +13,25 @@ export type ConversationStatus =
   | 'disconnecting'
   | 'error';
 
+export type MicPermissionState = 'granted' | 'denied' | 'prompt' | 'unknown';
+
 export interface UseConversationOptions {
   agentRoute?: string;
   buildConfig: () => ConvAIAgentConfig | Promise<ConvAIAgentConfig>;
   onMessage?: (role: 'agent' | 'user', text: string) => void;
   onStatusChange?: (status: ConversationStatus) => void;
   onError?: (error: string) => void;
+  /**
+   * MediaDevices deviceId for the microphone to use.
+   * Passed to getUserMedia and forwarded to the ElevenLabs SDK startSession.
+   * Enumerate available devices with navigator.mediaDevices.enumerateDevices().
+   */
+  inputDeviceId?: string;
+  /**
+   * MediaDevices deviceId for the audio output device.
+   * Forwarded to the ElevenLabs SDK startSession (SDK support required).
+   */
+  outputDeviceId?: string;
 }
 
 export interface UseConversationResult {
@@ -26,6 +39,8 @@ export interface UseConversationResult {
   isSpeaking: boolean;
   agentVolume: number;
   error: string | null;
+  /** Live mic permission state. Subscribes to OS-level changes via Permissions API. */
+  micPermission: MicPermissionState;
   start: () => Promise<void>;
   stop: () => Promise<void>;
   getInputByteFrequencyData?: () => Uint8Array;
@@ -39,10 +54,13 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     onMessage,
     onStatusChange,
     onError,
+    inputDeviceId,
+    outputDeviceId,
   } = options;
 
   const [status, setStatus] = useState<ConversationStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [micPermission, setMicPermission] = useState<MicPermissionState>('unknown');
   const agentIdRef = useRef<string | null>(null);
 
   // Keep callbacks in refs so hook options never need to change identity.
@@ -53,6 +71,30 @@ export function useConversation(options: UseConversationOptions): UseConversatio
   onStatusChangeRef.current = onStatusChange;
   onMessageRef.current = onMessage;
   onErrorRef.current = onError;
+
+  // ── Mic permission monitoring (RQ-06) ─────────────────────────────────────
+  // Subscribe to OS-level mic permission changes via Permissions API.
+  // Safe to no-op on browsers that don't support it (Safari iOS).
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.permissions) return;
+
+    let permissionStatus: PermissionStatus | null = null;
+
+    navigator.permissions
+      .query({ name: 'microphone' as PermissionName })
+      .then((ps) => {
+        permissionStatus = ps;
+        setMicPermission(ps.state as MicPermissionState);
+        ps.onchange = () => setMicPermission(ps.state as MicPermissionState);
+      })
+      .catch(() => {
+        // Permissions API not available or microphone query not supported
+      });
+
+    return () => {
+      if (permissionStatus) permissionStatus.onchange = null;
+    };
+  }, []);
 
   // updateStatus is stable — no external deps, reads callbacks from refs
   const updateStatus = useCallback((next: ConversationStatus) => {
@@ -128,14 +170,21 @@ export function useConversation(options: UseConversationOptions): UseConversatio
       // The ElevenLabs SDK calls getUserMedia internally — on macOS Chrome,
       // two concurrent streams cause the second to receive silence.
       // See COE-S11-001 for the full post-mortem.
-      const permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioConstraints: MediaTrackConstraints = inputDeviceId
+        ? { deviceId: { exact: inputDeviceId } }
+        : {};
+      const permStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       permStream.getTracks().forEach(t => t.stop());
       console.log('[voice-lib] Mic permission granted (stream released) — calling startSession...');
 
       // v1.3: startSession(HookOptions) — signedUrl is a TOP-LEVEL field, not nested
       if (data.signed_url) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (elevenRef.current.startSession as any)({ signedUrl: data.signed_url });
+        await (elevenRef.current.startSession as any)({
+          signedUrl: data.signed_url,
+          ...(inputDeviceId && { inputDeviceId }),
+          ...(outputDeviceId && { outputDeviceId }),
+        });
       } else {
         throw new Error('No signed_url returned from agent route');
       }
@@ -147,7 +196,7 @@ export function useConversation(options: UseConversationOptions): UseConversatio
       updateStatus('error');
       onErrorRef.current?.(msg);
     }
-  }, [agentRoute, buildConfig, updateStatus]);
+  }, [agentRoute, buildConfig, updateStatus, inputDeviceId, outputDeviceId]);
 
   const stop = useCallback(async () => {
     updateStatus('disconnecting');
@@ -170,6 +219,7 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     isSpeaking: status === 'agent-speaking',
     agentVolume: elevenRef.current.getOutputVolume(),
     error,
+    micPermission,
     start,
     stop,
     getInputByteFrequencyData: elevenRef.current.getInputByteFrequencyData,
