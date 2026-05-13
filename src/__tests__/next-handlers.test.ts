@@ -15,11 +15,12 @@ const PROFILE: VoiceProfile = {
   fishSettings: { temperature: 0.7, top_p: 0.8, speed: 1.0 },
 };
 
-function makeRequest(body: object, method = 'POST') {
+function makeRequest(body: object, method = 'POST', url = 'http://localhost/api/tts') {
   return {
     json: async () => body,
     method,
-  } as unknown as import('next/server').NextRequest;
+    url,
+  } as unknown as Request;
 }
 
 async function readBody(res: Response): Promise<unknown> {

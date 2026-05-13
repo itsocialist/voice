@@ -1,6 +1,6 @@
 {
   "name": "@itsocialist/voice",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Multi-provider voice library for Next.js: ElevenLabs, Fish Audio, OpenAI TTS, Deepgram STT, and ElevenLabs ConvAI — with React hooks and drop-in route handlers",
   "type": "module",
   "main": "./dist/index.cjs",

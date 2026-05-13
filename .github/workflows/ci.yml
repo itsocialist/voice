@@ -61,11 +61,48 @@ jobs:
           npm init -y > /dev/null
           npm install $GITHUB_WORKSPACE > /dev/null
           cat > test.mjs <<'EOF'
-          import { ELEVENLABS_MODELS, createConvAIAgent, voiceRegistry } from '@itsocialist/voice';
+          import {
+            ELEVENLABS_MODELS,
+            createConvAIAgent,
+            voiceRegistry,
+            ConvAIError,
+            createConvAI,
+            elevenlabs,
+            hume,
+            startConvAISession,
+            endConvAISession,
+            synthesizeSpeech,
+            synthesizeSpeechStream,
+            getProviderStatus,
+          } from '@itsocialist/voice';
+          // v0.3.0 surface
           if (typeof createConvAIAgent !== 'function') throw new Error('createConvAIAgent missing');
+          if (typeof synthesizeSpeech !== 'function') throw new Error('synthesizeSpeech missing');
+          if (typeof synthesizeSpeechStream !== 'function') throw new Error('synthesizeSpeechStream missing');
+          // v0.2.3 surface
           if (!ELEVENLABS_MODELS.FLASH_V2_5) throw new Error('FLASH_V2_5 missing');
           if (!voiceRegistry) throw new Error('voiceRegistry missing');
-          console.log('✓ ESM consumer ok');
+          // v0.3.1 surface — typed error
+          if (typeof ConvAIError !== 'function') throw new Error('ConvAIError missing');
+          // v0.3.2 surface — getProviderStatus non-throwing with no env keys
+          const status = getProviderStatus();
+          if (status.primary !== null && !Array.isArray(status.available))
+            throw new Error('getProviderStatus shape wrong');
+          // v0.3.3 surface — ConvAI backend abstraction
+          if (typeof createConvAI !== 'function') throw new Error('createConvAI missing');
+          if (typeof elevenlabs !== 'function') throw new Error('elevenlabs factory missing');
+          if (typeof startConvAISession !== 'function') throw new Error('startConvAISession missing');
+          if (typeof endConvAISession !== 'function') throw new Error('endConvAISession missing');
+          const elBackend = elevenlabs({ apiKey: 'fake' });
+          if (elBackend.id !== 'elevenlabs') throw new Error('elevenlabs.id mismatch');
+          // v0.4.0 surface — Hume backend
+          if (typeof hume !== 'function') throw new Error('hume factory missing');
+          const humeBackend = hume({ apiKey: 'fake', secretKey: 'fake' });
+          if (humeBackend.id !== 'hume') throw new Error('hume.id mismatch');
+          // Provider-neutral verbs accept the backend object
+          const convai = createConvAI({ backend: humeBackend });
+          if (convai.backend !== 'hume') throw new Error('createConvAI dispatch wrong');
+          console.log('✓ ESM consumer ok (v0.4.0 surface)');
           EOF
           node test.mjs
 
@@ -73,10 +110,13 @@ jobs:
         run: |
           cd /tmp/smoke
           cat > test.cjs <<'EOF'
-          const { ELEVENLABS_MODELS, createConvAIAgent } = require('@itsocialist/voice');
+          const { ELEVENLABS_MODELS, createConvAIAgent, createConvAI, hume, elevenlabs } = require('@itsocialist/voice');
           if (typeof createConvAIAgent !== 'function') throw new Error('createConvAIAgent missing');
           if (!ELEVENLABS_MODELS.FLASH_V2_5) throw new Error('FLASH_V2_5 missing');
-          console.log('✓ CJS consumer ok');
+          if (typeof createConvAI !== 'function') throw new Error('createConvAI missing');
+          if (typeof elevenlabs !== 'function') throw new Error('elevenlabs missing');
+          if (typeof hume !== 'function') throw new Error('hume missing');
+          console.log('✓ CJS consumer ok (v0.4.0 surface)');
           EOF
           node test.cjs
 
@@ -96,8 +136,7 @@ jobs:
           node deep.mjs
 
       - name: Run vitest
+        # Honest CI as of v0.4.0.1: vitest failures block the build. Coverage
+        # is still thin (3 files, 27 tests) — v0.4.2 adds ConvAI client + hook
+        # + Hume backend tests — but at least every test that exists must pass.
         run: npm run test:run
-        continue-on-error: true
-        # vitest is currently thin coverage (3 files); don't fail CI on test
-        # failures yet. Flip continue-on-error to false in v0.3.x once
-        # coverage is up.

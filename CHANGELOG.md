@@ -11,6 +11,41 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.4.1] — 2026-05-13
+
+### Summary
+
+Test-hygiene patch. Fixes 3 vitest failures that have been silently passing
+through CI since the v0.3.2 router refactor (CI was using
+`continue-on-error: true` on the vitest step). No runtime behavior change.
+
+### Fixed
+
+- **3 failing `next-handlers.test.ts` tests** now pass. Root cause: the v0.3.2
+  Next TTS handler added `?stream=1` query-param parsing via `new URL(request.url)`,
+  but the test fixture's `makeRequest()` helper didn't set `url`, causing
+  `new URL(undefined)` to throw "Invalid URL". The handler caught that as a 500.
+  Fixture now supplies a default URL.
+
+- **Test fixture cleanup** — `makeRequest()` returns `Request`-shaped objects
+  instead of casting to `import('next/server').NextRequest` (which had been
+  failing the standalone `tsc --noEmit` check since the package layout change).
+
+### Changed
+
+- **CI vitest step now blocks the build** (`continue-on-error: false`). Failures
+  are real failures again. Coverage is still thin (3 test files, 27 tests);
+  v0.4.3 adds ConvAI client + hook + Hume backend tests.
+
+- **CI smoke tests extended to the v0.4.0 surface**. The pre-existing
+  ESM/CJS/deep-imports smoke pattern now also exercises `createConvAI`,
+  `elevenlabs()` factory, `hume()` factory, `startConvAISession` /
+  `endConvAISession` standalone verbs, `getProviderStatus()` non-throw,
+  and `ConvAIError` shape. A regression in any v0.3.x or v0.4.0 export now
+  fails the build.
+
+---
+
 ## [0.4.0] — 2026-05-13
 
 ### Summary
@@ -748,7 +783,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/itsocialist/voice/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/itsocialist/voice/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/itsocialist/voice/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/itsocialist/voice/compare/v0.3.2...v0.3.3
