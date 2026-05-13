@@ -11,6 +11,107 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.4.3] — 2026-05-13
+
+### Summary
+
+Provider-aware `useConversation` — Hume EVI 3 is now reachable from React
+in addition to the server side. Same hook, same `UseConversationResult`
+interface; the agent route's `backend` field decides which session adapter
+runs. Implements the Option-2 dispatch the SDK design review recommended
+and the v0.3.3 server-side abstraction telegraphed.
+
+**Implementation route taken**: dropped the `@elevenlabs/react`
+`useConversation()` sub-hook coupling that v0.4.2 had, switched to
+`@elevenlabs/client`'s imperative `Conversation.startSession()` API
+(already a transitive dep). React's rules-of-hooks block conditional
+sub-hooks; imperative SDK calls inside `useEffect`/`useCallback` are
+free to dispatch. Hume's `hume` SDK is added as an optional peer dep,
+lazy-imported only when `backend: 'hume'` is in play.
+
+See `development/rfc-v0.4.3-provider-aware-useConversation.md` for the
+full design context and the 10-step implementation plan this followed.
+
+### Added
+
+- **`react/sessions/` module** — backend-agnostic adapter layer:
+  - `types.ts` — `ConversationSession` interface, `OpenSessionOptions`,
+    `OpenSessionCallbacks`, `ConvAIRouteResponse` (the agent route
+    response shape, now with an optional `backend` field).
+  - `elevenlabs-session.ts` — `openElevenLabsSession()` adapter. Calls
+    `Conversation.startSession()` from `@elevenlabs/client` directly.
+    Preserves the v0.2.1 WebRTC initial-mic-track audio-constraints fix
+    (COE-S11-001 follow-up) verbatim.
+  - `hume-session.ts` — `openHumeSession()` adapter. Lazy-loads the
+    `hume` SDK, parses `config_id` + `access_token` from the wss URL the
+    server-side Hume backend produced, calls
+    `client.empathicVoice.chat.connect()`. Throws `ConvAIError` with
+    `code: 'HUME_SDK_NOT_INSTALLED'` when the optional peer dep is missing.
+  - `dispatch.ts` — `openSession()` switches on `data.backend` and
+    instantiates the right adapter (lazy `import('./hume-session')`
+    keeps the Hume SDK out of bundles for ElevenLabs-only consumers).
+
+- **`backend` field on the Next ConvAI route response** — the default
+  bundled handler returns `'elevenlabs'` (hard-wired today; a backend-aware
+  `createConvAIHandler({ backend })` factory lands in v0.4.4). Consumers
+  writing custom Hume routes return `{ backend: 'hume', agent_id, signed_url }`
+  and the React hook automatically dispatches to the Hume adapter.
+
+- **`hume` as optional peer dependency** (`peerDependencies` entry plus
+  `peerDependenciesMeta.hume.optional = true`). Consumers using only
+  ElevenLabs ConvAI don't need to install it; consumers using Hume from
+  React install it via `npm install hume` and the lazy import succeeds.
+
+### Changed
+
+- **`useConversation` / `useVoiceDuplex` internals refactored** — no longer
+  call `@elevenlabs/react`'s `useConversation()` sub-hook. The public
+  `UseConversationResult` interface is **unchanged byte-for-byte from
+  v0.4.2**: every field (`status`, `isSpeaking`, `agentVolume`, `error`,
+  `micPermission`, `lastInterruptionAt`, `start`, `stop`, `changeInputDevice`,
+  `changeOutputDevice`, `getInputByteFrequencyData`,
+  `getOutputByteFrequencyData`) keeps the same signature and semantics.
+
+- **`VoiceDuplexProvider`** is now a pass-through component
+  (`<>{children}</>`). It no longer wraps `@elevenlabs/react`'s
+  `ConversationProvider` — that React context is no longer needed once
+  the sub-hook is gone. The component remains exported for back-compat;
+  marked `@deprecated since v0.4.3 — no longer functionally required.
+  Retained for back-compat; will be removed in v1.0.0.`
+
+### Known limitations (Hume React adapter, v0.4.3)
+
+These two will close in v0.4.3.1 once we have live Hume creds to verify
+against. Neither blocks the empathic-axis use case SpeakerHero is wiring up.
+
+- **Frequency-data plumbing**: `getInputByteFrequencyData` /
+  `getOutputByteFrequencyData` return empty arrays during Hume sessions.
+  This means `<VoiceWaveform>`, `<VoiceMeter>`, `useInputBands`,
+  `useOutputBands`, `useInputLevel`, `useOutputLevel` show flat/zero
+  output for Hume but work correctly for ElevenLabs sessions. Requires
+  wiring our own Web Audio AnalyserNode against Hume's MediaStreams.
+
+- **Mid-session device switching**: `conv.changeInputDevice(...)` /
+  `changeOutputDevice(...)` throw `ConvAIError { code: 'NOT_SUPPORTED' }`
+  on the Hume backend. The Hume SDK doesn't expose track replacement
+  through a public API; closing the session and reconnecting is the
+  current workaround.
+
+### SpeakerHero migration
+
+**Zero code changes required.** The ElevenLabs path is byte-for-byte
+the same — same hook, same return shape, same WebRTC mic-constraints fix.
+The verification gate at the bottom of the RFC manually checked the
+ElevenLabs flow against a /tmp consumer build before tagging.
+
+To opt into Hume from React: install `hume` (`npm install hume`), wire
+a custom POST route that uses `createConvAI({ backend: hume({...}) })`
+server-side and returns `{ backend: 'hume', agent_id, signed_url }`.
+The same `useVoiceDuplex({ ... })` call in your component will dispatch
+to the Hume adapter automatically.
+
+---
+
 ## [0.4.2] — 2026-05-13
 
 ### Summary
@@ -873,7 +974,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.4.2...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/itsocialist/voice/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/itsocialist/voice/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/itsocialist/voice/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/itsocialist/voice/compare/v0.3.4...v0.4.0

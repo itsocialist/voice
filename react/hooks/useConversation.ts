@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useConversation as useElevenLabsConversation } from '@elevenlabs/react';
 import type { ConvAIAgentConfig } from '../../src/types';
+import { openSession } from '../sessions/dispatch';
+import type { ConversationSession, ConvAIRouteResponse } from '../sessions/types';
 
 export type ConversationStatus =
   | 'idle'
@@ -27,20 +28,20 @@ export interface UseConversationOptions {
    * response. Useful for showing "interrupted" affordances in the UI, or
    * for telemetry counting natural barge-ins.
    *
-   * v0.3.3+ — passthrough from the @elevenlabs/react onInterruption callback.
-   * No programmatic agent-interrupt API exists in the SDK; you can stop the
-   * session entirely via stop() if you need a hard stop.
+   * v0.3.3+ — passthrough from the underlying SDK's onInterruption callback.
+   * No programmatic agent-interrupt API exists; you can stop the session
+   * entirely via stop() if you need a hard stop.
    */
   onInterruption?: (event: { eventId: number }) => void;
   /**
    * MediaDevices deviceId for the microphone to use.
-   * Passed to getUserMedia and forwarded to the ElevenLabs SDK startSession.
+   * Passed to getUserMedia and forwarded to the underlying SDK startSession.
    * Enumerate available devices with navigator.mediaDevices.enumerateDevices().
    */
   inputDeviceId?: string;
   /**
    * MediaDevices deviceId for the audio output device.
-   * Forwarded to the ElevenLabs SDK startSession (SDK support required).
+   * Forwarded to the underlying SDK startSession (SDK support required).
    */
   outputDeviceId?: string;
 }
@@ -91,15 +92,13 @@ export function useConversation(options: UseConversationOptions): UseConversatio
   const [micPermission, setMicPermission] = useState<MicPermissionState>('unknown');
   const [lastInterruptionAt, setLastInterruptionAt] = useState<number | null>(null);
   const agentIdRef = useRef<string | null>(null);
-  // Which SDK transport the active session is using. WebRTC initial mic track
-  // ignores constraint defaults; we re-apply via changeInputDevice in onConnect.
-  const transportRef = useRef<'websocket' | 'webrtc' | null>(null);
-  // Carry inputDeviceId into onConnect so the WebRTC auto-fix can use it.
-  // Stored in a ref so onConnect's identity stays stable.
-  const pendingInputDeviceIdRef = useRef<string | undefined>(undefined);
+
+  // The active session (set when start() succeeds, cleared on stop / onDisconnect).
+  // Replaces v0.4.2's elevenRef — now backend-agnostic via the adapter.
+  const sessionRef = useRef<ConversationSession | null>(null);
 
   // Keep callbacks in refs so hook options never need to change identity.
-  // This prevents the ElevenLabs hook from being recreated on every parent render.
+  // This prevents the session adapter from being recreated on every parent render.
   const onStatusChangeRef = useRef(onStatusChange);
   const onMessageRef = useRef(onMessage);
   const onErrorRef = useRef(onError);
@@ -139,68 +138,6 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     onStatusChangeRef.current?.(next);
   }, []);
 
-  // ── @elevenlabs/react v1.3 API ─────────────────────────────────────────────
-  // - useConversation() takes callbacks via HookOptions (registered with provider context)
-  // - startSession(opts?: HookOptions) receives SessionConfig as top-level fields:
-  //   { signedUrl } | { conversationToken } | { agentId }
-  //   NOT nested as { signedUrl: { ... } }
-  // - onConnect receives { conversationId: string }
-  // - onError receives (message: string, context?: any)
-  // - onMessage receives { message, source (deprecated), role }
-  const elevenlabs = useElevenLabsConversation({
-    onConnect: ({ conversationId }: { conversationId: string }) => {
-      console.log('[voice-lib] onConnect — conversationId:', conversationId);
-      updateStatus('connected');
-      // WebRTC initial mic track skips the SDK's defaultConstraints
-      // (echoCancellation, noiseSuppression, autoGainControl, channelCount:1).
-      // Post-connect changeInputDevice DOES apply them. Auto-fire it so
-      // consumers don't have to reach into the SDK manually.
-      const deviceId = pendingInputDeviceIdRef.current;
-      if (transportRef.current === 'webrtc' && deviceId) {
-        elevenRef.current.changeInputDevice({ inputDeviceId: deviceId })
-          .catch((err: unknown) => {
-            console.warn('[voice-lib] post-connect changeInputDevice failed:', err);
-          });
-      }
-    },
-    onDisconnect: () => {
-      console.log('[voice-lib] onDisconnect');
-      updateStatus('idle');
-      agentIdRef.current = null;
-      transportRef.current = null;
-      pendingInputDeviceIdRef.current = undefined;
-    },
-    onMessage: (props: { message: string; source: 'ai' | 'user'; role?: 'agent' | 'user' }) => {
-      // role is the current field; source is deprecated but kept for safety
-      const role = props.role ?? (props.source === 'ai' ? 'agent' : 'user');
-      onMessageRef.current?.(role, props.message);
-    },
-    onModeChange: (props: { mode: 'speaking' | 'listening' }) => {
-      updateStatus(props.mode === 'speaking' ? 'agent-speaking' : 'user-speaking');
-    },
-    onError: (msg: string) => {
-      const err = typeof msg === 'string' ? msg : 'Conversation error';
-      console.error('[voice-lib] SDK onError:', err);
-      setError(err);
-      updateStatus('error');
-      onErrorRef.current?.(err);
-    },
-    // Barge-in (v0.3.3+): server-side VAD detected the user speaking while
-    // the agent was mid-response. SDK has already cut the agent's audio at
-    // the output controller. We record the timestamp for UI use and forward
-    // the event to the consumer's optional callback.
-    onInterruption: (event: { event_id: number }) => {
-      const now = Date.now();
-      setLastInterruptionAt(now);
-      onInterruptionRef.current?.({ eventId: event.event_id });
-    },
-  });
-
-  // Stable ref to ElevenLabs instance — avoids `elevenlabs` being in dep arrays
-  // (it changes identity every render from the hook above)
-  const elevenRef = useRef(elevenlabs);
-  elevenRef.current = elevenlabs;
-
   const start = useCallback(async () => {
     setError(null);
     setLastInterruptionAt(null);
@@ -220,14 +157,20 @@ export function useConversation(options: UseConversationOptions): UseConversatio
         throw new Error(data.error ?? `Agent creation failed (${res.status})`);
       }
 
-      const data = await res.json();
+      const data = await res.json() as ConvAIRouteResponse;
       agentIdRef.current = data.agent_id;
-      console.log('[voice-lib] Agent created:', data.agent_id, '| signed_url:', !!data.signed_url);
+      console.log(
+        '[voice-lib] Agent created:',
+        data.agent_id,
+        '| backend:', data.backend ?? 'elevenlabs',
+        '| signed_url:', !!data.signed_url,
+        '| conversation_token:', !!data.conversation_token,
+      );
 
       // Request mic permission before connecting — getUserMedia must be called
       // from a user-gesture context. If denied, throw a clear error.
       // CRITICAL: Stop the stream immediately after permission check.
-      // The ElevenLabs SDK calls getUserMedia internally — on macOS Chrome,
+      // The underlying SDK calls getUserMedia internally — on macOS Chrome,
       // two concurrent streams cause the second to receive silence.
       // See COE-S11-001 for the full post-mortem.
       const audioConstraints: MediaTrackConstraints = inputDeviceId
@@ -235,33 +178,27 @@ export function useConversation(options: UseConversationOptions): UseConversatio
         : {};
       const permStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       permStream.getTracks().forEach(t => t.stop());
-      console.log('[voice-lib] Mic permission granted (stream released) — calling startSession...');
+      console.log('[voice-lib] Mic permission granted (stream released) — opening session...');
 
-      // Stash inputDeviceId for onConnect (WebRTC needs to re-apply post-connect).
-      pendingInputDeviceIdRef.current = inputDeviceId;
-
-      // v1.3: startSession(HookOptions) — { signedUrl } picks WebSocket, { conversationToken } picks WebRTC.
-      // Routes may return either; prefer signed_url for backward compatibility.
-      if (data.signed_url) {
-        transportRef.current = 'websocket';
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (elevenRef.current.startSession as any)({
-          signedUrl: data.signed_url,
-          ...(inputDeviceId && { inputDeviceId }),
-          ...(outputDeviceId && { outputDeviceId }),
-        });
-      } else if (data.conversation_token) {
-        transportRef.current = 'webrtc';
-        // WebRTC ignores top-level inputDeviceId at init; onConnect re-applies via changeInputDevice.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (elevenRef.current.startSession as any)({
-          conversationToken: data.conversation_token,
-          ...(outputDeviceId && { outputDeviceId }),
-        });
-      } else {
-        throw new Error('Agent route returned neither signed_url nor conversation_token');
-      }
-      console.log('[voice-lib] startSession() resolved — awaiting onConnect callback...');
+      // v0.4.3: dispatch on backend (data.backend, defaults to 'elevenlabs').
+      // openSession() switches over the backend and lazy-imports the
+      // appropriate adapter (Hume SDK isn't loaded unless backend === 'hume').
+      const session = await openSession(data, {
+        onStatusChange: (next) => updateStatus(next),
+        onMessage: (role, text) => onMessageRef.current?.(role, text),
+        onInterruption: (event) => {
+          setLastInterruptionAt(Date.now());
+          onInterruptionRef.current?.(event);
+        },
+        onError: (msg) => {
+          setError(msg);
+          updateStatus('error');
+          onErrorRef.current?.(msg);
+        },
+        inputDeviceId,
+        outputDeviceId,
+      });
+      sessionRef.current = session;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to start conversation';
       console.error('[voice-lib] start() caught error:', msg);
@@ -274,34 +211,44 @@ export function useConversation(options: UseConversationOptions): UseConversatio
   const stop = useCallback(async () => {
     updateStatus('disconnecting');
     try {
-      elevenRef.current.endSession();
+      await sessionRef.current?.end();
     } catch {
       // Ignore errors on disconnect — session may already be closed
     }
+    sessionRef.current = null;
 
     if (agentIdRef.current) {
       fetch(`${agentRoute}?agent_id=${agentIdRef.current}`, { method: 'DELETE' }).catch(() => {});
       agentIdRef.current = null;
     }
 
-    transportRef.current = null;
-    pendingInputDeviceIdRef.current = undefined;
     updateStatus('idle');
   }, [agentRoute, updateStatus]);
 
   const changeInputDevice = useCallback(async (deviceId: string) => {
-    pendingInputDeviceIdRef.current = deviceId;
-    await elevenRef.current.changeInputDevice({ inputDeviceId: deviceId });
+    await sessionRef.current?.changeInputDevice(deviceId);
   }, []);
 
   const changeOutputDevice = useCallback(async (deviceId: string) => {
-    await elevenRef.current.changeOutputDevice({ outputDeviceId: deviceId });
+    await sessionRef.current?.changeOutputDevice(deviceId);
+  }, []);
+
+  // Volume + frequency data getters. These read sessionRef.current at call
+  // time (the visualization hooks call them inside their rAF loops). When
+  // no session is active they return safe defaults so consumers don't have
+  // to guard against undefined.
+  const getInputByteFrequencyData = useCallback((): Uint8Array => {
+    return sessionRef.current?.getInputByteFrequencyData() ?? new Uint8Array(0);
+  }, []);
+
+  const getOutputByteFrequencyData = useCallback((): Uint8Array => {
+    return sessionRef.current?.getOutputByteFrequencyData() ?? new Uint8Array(0);
   }, []);
 
   return {
     status,
     isSpeaking: status === 'agent-speaking',
-    agentVolume: elevenRef.current.getOutputVolume(),
+    agentVolume: sessionRef.current?.getOutputVolume() ?? 0,
     error,
     micPermission,
     lastInterruptionAt,
@@ -309,7 +256,7 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     stop,
     changeInputDevice,
     changeOutputDevice,
-    getInputByteFrequencyData: elevenRef.current.getInputByteFrequencyData,
-    getOutputByteFrequencyData: elevenRef.current.getOutputByteFrequencyData,
+    getInputByteFrequencyData,
+    getOutputByteFrequencyData,
   };
 }

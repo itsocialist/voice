@@ -1,6 +1,6 @@
 {
   "name": "@itsocialist/voice",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Multi-provider voice library for Next.js: ElevenLabs, Fish Audio, OpenAI TTS, Deepgram STT, and ElevenLabs ConvAI — with React hooks and drop-in route handlers",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -112,7 +112,8 @@
   "license": "MIT",
   "peerDependencies": {
     "react": ">=18 <20",
-    "react-dom": ">=18 <20"
+    "react-dom": ">=18 <20",
+    "hume": ">=0.12 <1"
   },
   "peerDependenciesMeta": {
     "next": {
@@ -122,6 +123,9 @@
       "optional": true
     },
     "react-dom": {
+      "optional": true
+    },
+    "hume": {
       "optional": true
     }
   },

@@ -1,18 +1,26 @@
 /**
- * Next.js ConvAI Route Handler
+ * Next.js ConvAI Route Handler — ElevenLabs default.
  *
  * Drop into app/api/convai/agent/route.ts:
  *   export { POST, DELETE } from '@itsocialist/voice/next/convai-handler'
  *
- * POST body accepts either:
- *   - Nested v0.3.1+ shape:
- *       { agent: { systemPrompt, firstMessage, voiceId, agentName },
- *         llm?, tts?, vad?, session? }
- *   - Legacy flat v0.2.x shape: { systemPrompt, firstMessage, voiceId, ... }
- *     (deprecated, removed in v0.4.0).
+ * POST body (v0.4.0+ nested shape):
+ *   { agent: { systemPrompt, firstMessage, voiceId, agentName },
+ *     llm?, tts?, vad?, session? }
  *
- * POST response: { agent_id, conversation_token?, signed_url? }
+ * POST response: { backend: 'elevenlabs', agent_id, conversation_token?, signed_url? }
  * DELETE ?agent_id=xxx → { ok: true }
+ *
+ * **Wiring Hume from this route** is a v0.4.4 concern (createConvAIHandler
+ * factory). For v0.4.3, if you want a Hume-backed agent route, write your
+ * own POST handler that uses `createConvAI({ backend: hume({...}) })`
+ * server-side and returns the response shape:
+ *
+ *   { backend: 'hume', agent_id, signed_url }
+ *
+ * The React-side useConversation dispatches on the `backend` field, so
+ * you can have one route returning ElevenLabs sessions and another
+ * returning Hume sessions — the hook picks the right adapter per request.
  */
 
 import { createConvAIAgent, deleteConvAIAgent, ConvAIError } from '../src/convai/client';
@@ -55,6 +63,10 @@ export async function POST(request: Request) {
     const result = await createConvAIAgent(body, apiKey);
 
     return json({
+      // v0.4.3: backend field surfaces to the React-side useConversation hook
+      // so it can dispatch to the right session adapter. The bundled default
+      // handler is hard-wired to ElevenLabs; custom Hume routes return 'hume'.
+      backend: 'elevenlabs',
       agent_id: result.agentId,
       conversation_token: result.conversationToken,
       signed_url: result.signedUrl,

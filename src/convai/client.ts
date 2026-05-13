@@ -126,9 +126,13 @@ export class ConvAIError extends Error {
     message?: string,
     status?: number,
   ) {
+    super(
+      typeof codeOrDetails === 'string' ? (message ?? codeOrDetails) : codeOrDetails.message,
+      typeof codeOrDetails !== 'string' && codeOrDetails.cause !== undefined ? { cause: codeOrDetails.cause } : undefined
+    );
+
     // Legacy positional form: new ConvAIError(code, message, status?)
     if (typeof codeOrDetails === 'string') {
-      super(message ?? codeOrDetails);
       this.code = codeOrDetails;
       this.status = status;
       const meta = LEGACY_CODE_META[codeOrDetails as ConvAILegacyCode]
@@ -140,7 +144,6 @@ export class ConvAIError extends Error {
     }
 
     // New options form
-    super(codeOrDetails.message, codeOrDetails.cause !== undefined ? { cause: codeOrDetails.cause } : undefined);
     this.code = codeOrDetails.code;
     this.type = codeOrDetails.type;
     this.provider = codeOrDetails.provider ?? 'elevenlabs';
