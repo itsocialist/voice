@@ -123,13 +123,22 @@ export interface STTProviderStatus {
 
 // ── ConvAI ──
 
-/** VAD turn detection config for ConvAI sessions. */
+/**
+ * VAD turn detection config for ConvAI sessions.
+ *
+ * v0.3.1 introduced camelCase field names (`silenceDurationMs`) on the
+ * public surface. The snake_case form (`silence_duration_ms`) is the
+ * ElevenLabs wire format and is still accepted for one cycle with a
+ * runtime deprecation warning. Will be removed in v0.4.0.
+ */
 export interface ConvAITurnDetection {
   type: 'server_vad';
   /** Silence duration before turn handoff (ms). ElevenLabs default ~700; recommend 400 for sales sims. */
-  silence_duration_ms?: number;
+  silenceDurationMs?: number;
   /** VAD sensitivity (0.0–1.0). */
   threshold?: number;
+  /** @deprecated use `silenceDurationMs` — will be removed in v0.4.0. */
+  silence_duration_ms?: number;
 }
 
 /**
@@ -162,54 +171,116 @@ export interface ConvAILLMConfig {
   maxTokens?: number;
 }
 
-export interface ConvAIAgentConfig {
+/**
+ * Identity-level config: systemPrompt, firstMessage, voiceId, agentName.
+ *
+ * These four were top-level on `ConvAIAgentConfig` in v0.2.x. They were
+ * regrouped into `agent: {...}` in v0.3.1 to keep the parent config from
+ * becoming a kitchen sink (per SDK design review). Flat top-level fields
+ * are still accepted on input for v0.3.x with a runtime deprecation
+ * warning; nested form is canonical.
+ */
+export interface ConvAIAgentIdentity {
   systemPrompt: string;
   firstMessage: string;
   /** ElevenLabs voice ID */
   voiceId: string;
   agentName: string;
-  /**
-   * Max conversation duration in seconds.
-   * ElevenLabs default is 600s (10 min). SpeakerHero uses 3600s (1 hour).
-   */
-  maxDurationSeconds?: number;
+}
+
+/**
+ * TTS-related config grouped together. Maps to the `conversation_config.tts`
+ * object on the ElevenLabs API. Use {@link ELEVENLABS_MODELS} for typed
+ * `modelId` values.
+ */
+export interface ConvAITTSConfigGroup {
   /**
    * ElevenLabs TTS model ID.
    * @default 'eleven_v3_conversational' — Scribe v2 Realtime with emotional cues.
-   * Fallback options: 'eleven_flash_v2' (low latency), 'eleven_turbo_v2'.
+   * See {@link ELEVENLABS_MODELS} for typed presets.
    */
   modelId?: string;
-  /** TTS stability (0.0–1.0). v3 default: 0.5 (was 0.4 for flash_v2). */
+  /** TTS stability (0.0–1.0). v3 default: 0.5. */
   stability?: number;
   /** TTS similarity boost (0.0–1.0). Default: 0.75. */
   similarityBoost?: number;
-  /** VAD turn detection config. Reduces perceived response latency. */
-  turnDetection?: ConvAITurnDetection;
-  /** Timeout (ms) applied to all internal ElevenLabs fetch calls. Default: 15000. */
-  timeoutMs?: number;
   /**
    * Enables expressive audio-tag prompt augmentation in the LLM and TTS-side
-   * tag interpretation. Defaults to `true` when `modelId` is a v3 family model
-   * (`eleven_v3*`), `false` otherwise. ElevenLabs silently disables this on
-   * non-v3 models regardless of the value sent.
+   * tag interpretation. Defaults to `true` when `modelId` is a v3 family model.
+   * No effect on non-v3 models (silently disabled upstream).
    */
   expressiveMode?: boolean;
   /**
-   * Constrains the LLM to prefer this set of audio tags when adding inflection.
-   * Up to 20 tags. Reduces the failure mode where the model invents tags like
-   * `[interested]` / `[analytical]` and those bracketed strings get spoken
-   * aloud instead of being interpreted as performance cues. Plain strings are
-   * sent as-is; objects let you attach a `description` usage hint.
+   * Constrains the LLM to prefer this set of audio tags. Max 20.
+   * Reduces the failure mode where the model invents tags that get
+   * spoken aloud instead of interpreted as performance cues.
    */
   suggestedAudioTags?: ConvAISuggestedAudioTag[];
+}
+
+/**
+ * Session policy: duration limits and request timeouts.
+ */
+export interface ConvAISessionPolicy {
   /**
-   * LLM that powers the agent's response generation. Distinct from `modelId`
-   * (which is the TTS model). When omitted, ElevenLabs picks its account
-   * default (typically `gpt-4o-mini`). For sub-second per-turn latency,
-   * `'gpt-4o-mini'` is the recommended starting point.
+   * Max conversation duration (seconds). voice-lib default 3600 (1hr);
+   * ElevenLabs default is 600.
    */
+  maxDurationSeconds?: number;
+  /** Per-fetch timeout for ElevenLabs API calls. voice-lib default 15000ms. */
+  timeoutMs?: number;
+}
+
+/**
+ * Canonical nested ConvAI agent config (v0.3.1+).
+ *
+ *   agent — systemPrompt / firstMessage / voiceId / agentName
+ *   llm — model / temperature / maxTokens (ConvAI agent LLM, v0.2.4+)
+ *   tts — modelId / stability / similarityBoost / expressiveMode / suggestedAudioTags
+ *   vad — turn-detection config
+ *   session — maxDurationSeconds / timeoutMs
+ *
+ * Flat-shape input (every field at top level, as in v0.2.x) is still
+ * accepted by the public functions for one release cycle with a runtime
+ * deprecation warning. Will be removed in v0.4.0.
+ */
+export interface ConvAIAgentConfigNested {
+  agent: ConvAIAgentIdentity;
+  llm?: ConvAILLMConfig;
+  tts?: ConvAITTSConfigGroup;
+  vad?: ConvAITurnDetection;
+  session?: ConvAISessionPolicy;
+}
+
+/**
+ * Legacy v0.2.x flat config shape. Every consumer of `createConvAIAgent`
+ * before v0.3.1 used this shape. Still accepted on input for v0.3.x with
+ * a one-time runtime warning per process. Will be removed in v0.4.0.
+ *
+ * @deprecated use {@link ConvAIAgentConfigNested}
+ */
+export interface ConvAIAgentConfigFlat {
+  systemPrompt: string;
+  firstMessage: string;
+  voiceId: string;
+  agentName: string;
+  maxDurationSeconds?: number;
+  modelId?: string;
+  stability?: number;
+  similarityBoost?: number;
+  turnDetection?: ConvAITurnDetection;
+  timeoutMs?: number;
+  expressiveMode?: boolean;
+  suggestedAudioTags?: ConvAISuggestedAudioTag[];
   llm?: ConvAILLMConfig;
 }
+
+/**
+ * Public type accepted by `createConvAIAgent` and `resolveUniversalAgent`.
+ * Nested in v0.3.1+, flat for v0.2.x back-compat. Functions normalize both
+ * forms to the nested shape internally.
+ */
+export type ConvAIAgentConfig = ConvAIAgentConfigNested | ConvAIAgentConfigFlat;
 
 export interface ConvAIAgentResult {
   agentId: string;
@@ -220,10 +291,26 @@ export interface ConvAIAgentResult {
 }
 
 /**
- * Per-session overrides passed to getSignedUrlWithOverrides().
+ * Per-session overrides passed to `getSignedUrlWithOverrides()`.
  * Applied on top of a cached universal agent's base config.
+ *
+ * Nested in v0.3.1+; the flat field set is still accepted for v0.3.x with
+ * a runtime deprecation warning. Override is only honored if the agent's
+ * `overrides.conversation_config_override.agent.prompt` permissions allow
+ * it — configure in the ElevenLabs dashboard.
  */
-export interface ConvAISessionOverrides {
+export interface ConvAISessionOverridesNested {
+  agent?: Partial<ConvAIAgentIdentity>;
+  llm?: ConvAILLMConfig;
+  tts?: ConvAITTSConfigGroup;
+  vad?: ConvAITurnDetection;
+}
+
+/**
+ * Legacy v0.2.x flat overrides shape.
+ * @deprecated use {@link ConvAISessionOverridesNested}
+ */
+export interface ConvAISessionOverridesFlat {
   systemPrompt?: string;
   firstMessage?: string;
   voiceId?: string;
@@ -232,6 +319,8 @@ export interface ConvAISessionOverrides {
   suggestedAudioTags?: ConvAISuggestedAudioTag[];
   llm?: ConvAILLMConfig;
 }
+
+export type ConvAISessionOverrides = ConvAISessionOverridesNested | ConvAISessionOverridesFlat;
 
 // ── Next.js Route Handler Types ──
 
@@ -253,18 +342,9 @@ export interface STTRouteResponse {
   latencyMs: number;
 }
 
-export interface ConvAIAgentRouteBody {
-  systemPrompt: string;
-  firstMessage: string;
-  voiceId: string;
-  agentName: string;
-  maxDurationSeconds?: number;
-  modelId?: string;
-  stability?: number;
-  similarityBoost?: number;
-  turnDetection?: ConvAITurnDetection;
-  timeoutMs?: number;
-  expressiveMode?: boolean;
-  suggestedAudioTags?: ConvAISuggestedAudioTag[];
-  llm?: ConvAILLMConfig;
-}
+/**
+ * POST body for the ConvAI Next.js route handler. Accepts the same nested
+ * or flat shape as `ConvAIAgentConfig` — the handler passes the body
+ * through to `createConvAIAgent` which normalizes both forms.
+ */
+export type ConvAIAgentRouteBody = ConvAIAgentConfig;

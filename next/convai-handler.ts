@@ -4,7 +4,13 @@
  * Drop into app/api/convai/agent/route.ts:
  *   export { POST, DELETE } from '@itsocialist/voice/next/convai-handler'
  *
- * POST body: { systemPrompt, firstMessage, voiceId, agentName, ...optional ConvAIAgentConfig fields }
+ * POST body accepts either:
+ *   - Nested v0.3.1+ shape:
+ *       { agent: { systemPrompt, firstMessage, voiceId, agentName },
+ *         llm?, tts?, vad?, session? }
+ *   - Legacy flat v0.2.x shape: { systemPrompt, firstMessage, voiceId, ... }
+ *     (deprecated, removed in v0.4.0).
+ *
  * POST response: { agent_id, conversation_token?, signed_url? }
  * DELETE ?agent_id=xxx → { ok: true }
  */
@@ -19,6 +25,27 @@ function json(data: unknown, init?: ResponseInit): Response {
   });
 }
 
+/**
+ * Required-field check on the request body. Both nested and flat shapes
+ * are accepted — we look for the systemPrompt/firstMessage/voiceId fields
+ * wherever they live. The client normalizes the shape before any API call.
+ */
+function validateBody(body: ConvAIAgentRouteBody): string | null {
+  if ('systemPrompt' in body) {
+    // Flat shape
+    if (!body.systemPrompt) return 'systemPrompt is required';
+    if (!body.firstMessage) return 'firstMessage is required';
+    if (!body.voiceId) return 'voiceId is required';
+    return null;
+  }
+  // Nested shape
+  const agent = body.agent;
+  if (!agent?.systemPrompt) return 'agent.systemPrompt is required';
+  if (!agent?.firstMessage) return 'agent.firstMessage is required';
+  if (!agent?.voiceId) return 'agent.voiceId is required';
+  return null;
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.ELEVENLABS_API_KEY;
   if (!apiKey) {
@@ -27,44 +54,19 @@ export async function POST(request: Request) {
 
   try {
     const body: ConvAIAgentRouteBody = await request.json();
-    const {
-      systemPrompt,
-      firstMessage,
-      voiceId,
-      agentName,
-      maxDurationSeconds,
-      modelId,
-      stability,
-      similarityBoost,
-      turnDetection,
-      timeoutMs,
-      expressiveMode,
-      suggestedAudioTags,
-      llm,
-    } = body;
-
-    if (!systemPrompt || !firstMessage || !voiceId) {
-      return json({ error: 'systemPrompt, firstMessage, and voiceId are required' }, { status: 400 });
+    const validationError = validateBody(body);
+    if (validationError) {
+      return json({ error: validationError }, { status: 400 });
     }
 
-    const result = await createConvAIAgent(
-      {
-        systemPrompt,
-        firstMessage,
-        voiceId,
-        agentName: agentName ?? 'Agent',
-        maxDurationSeconds,
-        modelId,
-        stability,
-        similarityBoost,
-        turnDetection,
-        timeoutMs,
-        expressiveMode,
-        suggestedAudioTags,
-        llm,
-      },
-      apiKey
-    );
+    // Default agentName if missing (both shapes).
+    if ('systemPrompt' in body) {
+      body.agentName = body.agentName ?? 'Agent';
+    } else {
+      body.agent = { ...body.agent, agentName: body.agent.agentName ?? 'Agent' };
+    }
+
+    const result = await createConvAIAgent(body, apiKey);
 
     return json({
       agent_id: result.agentId,
@@ -75,11 +77,18 @@ export async function POST(request: Request) {
     console.error('[voice/convai] agent creation error:', error);
 
     if (error instanceof ConvAIError) {
+      // Map error type → HTTP status. type is the canonical retry-routing
+      // axis in v0.3.1+; legacy code field still set for backward compat.
       const httpStatus =
-        error.code === 'ELEVENLABS_UNAVAILABLE' ? 503
-        : error.code === 'API_KEY_MISSING' ? 500
+        error.type === 'auth' ? 500
+        : error.type === 'upstream_unavailable' ? 503
+        : error.type === 'rate_limit' ? 429
+        : error.type === 'config_invalid' ? 400
         : error.status ?? 500;
-      return json({ error: error.message, code: error.code }, { status: httpStatus });
+      return json(
+        { error: error.message, code: error.code, type: error.type, retryable: error.retryable },
+        { status: httpStatus },
+      );
     }
 
     return json(

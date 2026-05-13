@@ -17,9 +17,16 @@ export type {
   TTSProviderStatus,
   STTProviderStatus,
   ConvAIAgentConfig,
+  ConvAIAgentConfigNested,
+  ConvAIAgentConfigFlat,
+  ConvAIAgentIdentity,
+  ConvAITTSConfigGroup,
+  ConvAISessionPolicy,
   ConvAIAgentResult,
   ConvAITurnDetection,
   ConvAISessionOverrides,
+  ConvAISessionOverridesNested,
+  ConvAISessionOverridesFlat,
   ConvAISuggestedAudioTag,
   ConvAILLMConfig,
   TTSRouteBody,
@@ -55,6 +62,12 @@ export {
   deleteConvAIAgent,
   getSignedUrl,
   ConvAIError,
+} from './convai/client';
+export type {
+  ConvAIErrorType,
+  ConvAIProviderId,
+  ConvAILegacyCode,
+  ConvAIErrorDetails,
 } from './convai/client';
 export { ELEVENLABS_MODELS } from './convai/models';
 export type { ElevenLabsModelId } from './convai/models';

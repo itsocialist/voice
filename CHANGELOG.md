@@ -11,6 +11,122 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.1] — 2026-05-12
+
+### Summary
+
+Workstream B surface-cleanup, slice 1: config shape subdivision,
+camelCase wire-leak fix on `turnDetection`, and the `ConvAIError`
+taxonomy refactor recommended by the API/SDK design review. All three
+are technically breaking but bundled into a single release with one-cycle
+backward compatibility (deprecation warnings, not hard errors) so
+consumers can migrate at their own pace before v0.4.0.
+
+The v0.3.x cycle continues — Workstream B slice 2 (VoiceProfile
+symmetry, `getProviderStatus` non-throw, real streaming, barge-in API)
+ships in v0.3.2.
+
+### Added
+
+- **Nested `ConvAIAgentConfig` shape** — canonical from v0.3.1+:
+  ```ts
+  {
+    agent: { systemPrompt, firstMessage, voiceId, agentName },
+    llm?: { model, temperature, maxTokens },
+    tts?: { modelId, stability, similarityBoost, expressiveMode, suggestedAudioTags },
+    vad?: { type, silenceDurationMs, threshold },
+    session?: { maxDurationSeconds, timeoutMs },
+  }
+  ```
+  Subdivided into five concern groups (agent / llm / tts / vad / session)
+  to keep the config from becoming a kitchen-sink. v0.2.x flat shape
+  still accepted on input with a one-time deprecation warning per
+  process. Public type is a union: `ConvAIAgentConfigNested | ConvAIAgentConfigFlat`.
+
+- **`ConvAITurnDetection.silenceDurationMs`** — camelCase alternative
+  to the snake-case `silence_duration_ms` wire field (which leaked
+  through from the ElevenLabs API shape). Both accepted; snake-case
+  emits a deprecation warning. Snake-case removed in v0.4.0.
+
+- **`ConvAIError` carries `type`, `retryable`, `retryAfterMs`, `cause`** —
+  richer taxonomy for retry-routing and provider-neutral error handling.
+  `type` is the canonical category axis (`'auth' | 'rate_limit' |
+  'upstream_unavailable' | 'upstream_invalid' | 'config_invalid' |
+  'session_expired' | 'timeout'`). When upstream returns `Retry-After`,
+  the header is parsed into `retryAfterMs`. `cause` is populated when
+  the error wraps an underlying exception.
+
+  Legacy `code` field preserved unchanged — existing
+  `err.code === 'ELEVENLABS_UNAVAILABLE'` catch blocks still work. Both
+  the v0.2.x positional constructor (`new ConvAIError(code, message, status?)`)
+  and the new options-object constructor are supported.
+
+- **Public exports** — `ConvAIAgentConfigNested`, `ConvAIAgentConfigFlat`,
+  `ConvAIAgentIdentity`, `ConvAITTSConfigGroup`, `ConvAISessionPolicy`,
+  `ConvAISessionOverridesNested`, `ConvAISessionOverridesFlat`,
+  `ConvAIErrorType`, `ConvAIProviderId`, `ConvAILegacyCode`,
+  `ConvAIErrorDetails`.
+
+### Changed
+
+- **`ConvAIAgentRouteBody`** is now a type alias for `ConvAIAgentConfig`
+  (the union of nested and flat). The Next ConvAI route handler passes
+  the body straight through to `createConvAIAgent` after light required-field
+  validation; both shapes work in the route body.
+
+- **Next ConvAI handler HTTP status mapping** now reads `error.type`
+  (the canonical retry-routing axis):
+  - `type: 'auth'` → 500
+  - `type: 'upstream_unavailable'` → 503
+  - `type: 'rate_limit'` → 429
+  - `type: 'config_invalid'` → 400
+  - default → `error.status ?? 500`
+
+  Response body includes `code`, `type`, and `retryable` so consumers
+  can act on the new fields without parsing strings.
+
+- **`tsconfig.json`** target/lib bumped to ES2022 (was ES2020) to
+  enable `Error(message, { cause })` constructor support. Built output
+  remains broadly compatible — esbuild downlevels where needed.
+
+### Deprecated (one-cycle back-compat, removed in v0.4.0)
+
+- **Flat-shape config input** on `createConvAIAgent`, `resolveUniversalAgent`,
+  `getSignedUrlWithOverrides`. Emits one warning per process keyed
+  per call-site. Migrate to nested shape.
+
+- **`ConvAITurnDetection.silence_duration_ms`** — rename to
+  `silenceDurationMs`.
+
+### Migration notes
+
+For consumers staying on v0.2.x flat shape:
+```ts
+// v0.2.x — still works in v0.3.1, deprecation warning at runtime:
+await createConvAIAgent({
+  systemPrompt, firstMessage, voiceId, agentName,
+  modelId: 'eleven_flash_v2_5',
+  llm: { model: 'gpt-4o-mini' },
+  turnDetection: { type: 'server_vad', silence_duration_ms: 400 },
+});
+```
+
+For consumers adopting the nested shape:
+```ts
+// v0.3.1+ canonical:
+await createConvAIAgent({
+  agent: { systemPrompt, firstMessage, voiceId, agentName },
+  llm: { model: 'gpt-4o-mini' },
+  tts: { modelId: ELEVENLABS_MODELS.FLASH_V2_5 },
+  vad: { type: 'server_vad', silenceDurationMs: 400 },
+  session: { maxDurationSeconds: 1200 },
+});
+```
+
+See [BREAKING.md](./BREAKING.md) for the full migration path.
+
+---
+
 ## [0.3.0] — 2026-05-12
 
 ### Summary
@@ -337,7 +453,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/itsocialist/voice/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/itsocialist/voice/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/itsocialist/voice/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/itsocialist/voice/compare/v0.2.2...v0.2.3

@@ -141,34 +141,61 @@ interface STTResponse {
 // VAD turn detection — reduces perceived response latency
 interface ConvAITurnDetection {
   type: 'server_vad'
-  silence_duration_ms?: number   // ElevenLabs default ~700ms; recommend 400 for fast-paced apps
+  silenceDurationMs?: number     // ElevenLabs default ~700ms; recommend 400 for fast-paced apps
   threshold?: number             // VAD sensitivity 0.0–1.0
+  /** @deprecated use silenceDurationMs — removed in v0.4.0 */
+  silence_duration_ms?: number
 }
 
-// Full agent configuration (used by createConvAIAgent and resolveUniversalAgent)
-interface ConvAIAgentConfig {
-  systemPrompt: string
-  firstMessage: string
-  voiceId: string                // ElevenLabs voice ID
-  agentName: string
-  maxDurationSeconds?: number    // default 3600 (1hr); ElevenLabs default is 600s
-  modelId?: string               // default 'eleven_v3_conversational'
+// Full agent configuration (v0.3.1+ nested shape).
+// createConvAIAgent / resolveUniversalAgent accept either this nested form
+// or the v0.2.x flat shape (ConvAIAgentConfigFlat); flat input emits a
+// deprecation warning. ConvAIAgentConfig = ConvAIAgentConfigNested | ConvAIAgentConfigFlat.
+interface ConvAIAgentConfigNested {
+  agent: {
+    systemPrompt: string
+    firstMessage: string
+    voiceId: string              // ElevenLabs voice ID
+    agentName: string
+  }
+  llm?: ConvAILLMConfig
+  tts?: {
+    modelId?: string             // default 'eleven_v3_conversational'
                                  // typed presets in ELEVENLABS_MODELS export:
                                  //   V3_CONVERSATIONAL — expressive, ~2–5s TTFA
                                  //   FLASH_V2_5       — realtime, ~75ms TTFA
                                  //   TURBO_V2_5       — middle ground
-                                 //   FLASH_V2, TURBO_V2 — legacy
-  stability?: number             // TTS stability 0.0–1.0; v3 default 0.5
-  similarityBoost?: number       // TTS similarity boost 0.0–1.0; default 0.75
-  turnDetection?: ConvAITurnDetection
-  timeoutMs?: number             // fetch timeout ms for all internal calls; default 15000
-  expressiveMode?: boolean       // v3-only; default true on v3 models, false otherwise.
-                                 // Enables expressive audio-tag interpretation.
-  suggestedAudioTags?: ConvAISuggestedAudioTag[]
-                                 // v3-only; max 20. Constrains LLM to a preferred tag set.
-                                 // Prevents invented bracket tags being spoken aloud.
-  llm?: ConvAILLMConfig          // RQ-12 — agent LLM selection (v0.2.4+)
+    stability?: number           // 0.0–1.0; v3 default 0.5
+    similarityBoost?: number     // 0.0–1.0; default 0.75
+    expressiveMode?: boolean     // v3-only; default true on v3
+    suggestedAudioTags?: ConvAISuggestedAudioTag[]   // v3-only; max 20
+  }
+  vad?: ConvAITurnDetection
+  session?: {
+    maxDurationSeconds?: number  // voice-lib default 3600; ElevenLabs default 600
+    timeoutMs?: number           // fetch timeout; default 15000
+  }
 }
+
+// Legacy v0.2.x flat shape — still accepted in v0.3.x, removed in v0.4.0.
+// @deprecated use ConvAIAgentConfigNested
+interface ConvAIAgentConfigFlat {
+  systemPrompt: string
+  firstMessage: string
+  voiceId: string
+  agentName: string
+  maxDurationSeconds?: number
+  modelId?: string
+  stability?: number
+  similarityBoost?: number
+  turnDetection?: ConvAITurnDetection
+  timeoutMs?: number
+  expressiveMode?: boolean
+  suggestedAudioTags?: ConvAISuggestedAudioTag[]
+  llm?: ConvAILLMConfig
+}
+
+type ConvAIAgentConfig = ConvAIAgentConfigNested | ConvAIAgentConfigFlat
 
 type ConvAISuggestedAudioTag = string | { tag: string; description?: string }
 
