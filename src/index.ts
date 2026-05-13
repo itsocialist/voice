@@ -1,5 +1,5 @@
-// @briandawson/voice — Server/Node exports
-// Import from '@briandawson/voice'
+// @itsocialist/voice — Server/Node exports
+// Import from '@itsocialist/voice'
 
 // Types
 export type {
@@ -55,3 +55,5 @@ export {
   getSignedUrl,
   ConvAIError,
 } from './convai/client';
+export { ELEVENLABS_MODELS } from './convai/models';
+export type { ElevenLabsModelId } from './convai/models';

@@ -11,6 +11,47 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.3] — 2026-05-12
+
+### Summary
+
+Adds typed `ELEVENLABS_MODELS` preset constants so consumers can pick the ConvAI
+TTS model from a discoverable, autocomplete-friendly enum instead of memorising
+magic strings. Also fixes a long-standing scope-name inconsistency where several
+internal files referenced `@briandawson/voice` (the previous scope) instead of
+`@itsocialist/voice`.
+
+### Added
+
+- `ELEVENLABS_MODELS` constants and `ElevenLabsModelId` type, exported from
+  `@itsocialist/voice`. Maps to the current ElevenLabs ConvAI model family with
+  inline latency/expressiveness tradeoffs documented at [src/convai/models.ts](src/convai/models.ts):
+
+  ```ts
+  import { createConvAIAgent, ELEVENLABS_MODELS } from '@itsocialist/voice';
+
+  await createConvAIAgent({
+    modelId: ELEVENLABS_MODELS.FLASH_V2_5,  // realtime, ~75ms TTFA
+    // …
+  });
+  ```
+
+  `modelId` on `ConvAIAgentConfig` stays `string` — the constants narrow IDE
+  autocomplete without locking the type. Pass any other identifier ElevenLabs
+  supports.
+
+### Fixed
+
+- Internal references to `@briandawson/voice` updated to `@itsocialist/voice`
+  across [tsconfig.json](tsconfig.json), [next/tts-handler.ts](next/tts-handler.ts),
+  [next/index.ts](next/index.ts), [react/index.ts](react/index.ts),
+  [src/index.ts](src/index.ts), [src/types.ts](src/types.ts), and
+  [src/profiles/registry.ts](src/profiles/registry.ts). Surface-level only — no
+  runtime behaviour change. Flagged by independent consumer-developer and
+  API/SDK-design review.
+
+---
+
 ## [0.2.2] — 2026-05-12
 
 ### Summary
@@ -173,7 +214,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/itsocialist/voice/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/itsocialist/voice/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/itsocialist/voice/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/itsocialist/voice/compare/v0.1.0...v0.2.0

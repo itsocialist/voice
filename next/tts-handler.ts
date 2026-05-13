@@ -3,11 +3,11 @@
  *
  * Drop into your app's app/api/tts/route.ts:
  *
- *   export { POST, GET } from '@briandawson/voice/next/tts-handler'
+ *   export { POST, GET } from '@itsocialist/voice/next/tts-handler'
  *
  * Or wrap it to add your own profile resolution:
  *
- *   import { createTTSHandler } from '@briandawson/voice/next'
+ *   import { createTTSHandler } from '@itsocialist/voice/next'
  *   import { myRegistry } from '@/lib/voice-profiles'
  *   export const { POST, GET } = createTTSHandler({ registry: myRegistry })
  */

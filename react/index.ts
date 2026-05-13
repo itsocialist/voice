@@ -1,4 +1,4 @@
-// @briandawson/voice/react — React hooks and components
+// @itsocialist/voice/react — React hooks and components
 
 // Hooks
 export { useVoice } from './hooks/useVoice';

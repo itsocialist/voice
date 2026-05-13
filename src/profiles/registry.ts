@@ -5,7 +5,7 @@
  * The registry is then passed to route handlers and hooks.
  *
  * Example:
- *   import { voiceRegistry } from '@briandawson/voice'
+ *   import { voiceRegistry } from '@itsocialist/voice'
  *   voiceRegistry.register('narrator', { elevenlabsVoiceId: '...', ... })
  *   const profile = voiceRegistry.resolve('narrator')   // exact match
  *   const profile = voiceRegistry.resolve('champion')   // falls back to default

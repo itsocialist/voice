@@ -13,9 +13,9 @@
     "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
-      "@briandawson/voice": ["./src/index.ts"],
-      "@briandawson/voice/next": ["./next/index.ts"],
-      "@briandawson/voice/react": ["./react/index.ts"],
+      "@itsocialist/voice": ["./src/index.ts"],
+      "@itsocialist/voice/next": ["./next/index.ts"],
+      "@itsocialist/voice/react": ["./react/index.ts"],
       "react": ["./node_modules/@types/react"]
     }
   },

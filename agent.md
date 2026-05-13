@@ -153,7 +153,11 @@ interface ConvAIAgentConfig {
   agentName: string
   maxDurationSeconds?: number    // default 3600 (1hr); ElevenLabs default is 600s
   modelId?: string               // default 'eleven_v3_conversational'
-                                 // options: 'eleven_flash_v2', 'eleven_turbo_v2'
+                                 // typed presets in ELEVENLABS_MODELS export:
+                                 //   V3_CONVERSATIONAL — expressive, ~2–5s TTFA
+                                 //   FLASH_V2_5       — realtime, ~75ms TTFA
+                                 //   TURBO_V2_5       — middle ground
+                                 //   FLASH_V2, TURBO_V2 — legacy
   stability?: number             // TTS stability 0.0–1.0; v3 default 0.5
   similarityBoost?: number       // TTS similarity boost 0.0–1.0; default 0.75
   turnDetection?: ConvAITurnDetection

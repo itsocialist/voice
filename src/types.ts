@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────
-// @briandawson/voice — Core Types
+// @itsocialist/voice — Core Types
 // ─────────────────────────────────────────────
 
 // ── Provider Names ──
