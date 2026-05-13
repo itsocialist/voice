@@ -1,12 +1,72 @@
 {
   "name": "@itsocialist/voice",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Multi-provider voice library for Next.js: ElevenLabs, Fish Audio, OpenAI TTS, Deepgram STT, and ElevenLabs ConvAI — with React hooks and drop-in route handlers",
-  "main": "./src/index.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./next": "./next/index.ts",
-    "./react": "./react/index.ts"
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./next": {
+      "import": {
+        "types": "./dist/next/index.d.ts",
+        "default": "./dist/next/index.js"
+      },
+      "require": {
+        "types": "./dist/next/index.d.cts",
+        "default": "./dist/next/index.cjs"
+      }
+    },
+    "./next/tts-handler": {
+      "import": {
+        "types": "./dist/next/tts-handler.d.ts",
+        "default": "./dist/next/tts-handler.js"
+      },
+      "require": {
+        "types": "./dist/next/tts-handler.d.cts",
+        "default": "./dist/next/tts-handler.cjs"
+      }
+    },
+    "./next/stt-handler": {
+      "import": {
+        "types": "./dist/next/stt-handler.d.ts",
+        "default": "./dist/next/stt-handler.js"
+      },
+      "require": {
+        "types": "./dist/next/stt-handler.d.cts",
+        "default": "./dist/next/stt-handler.cjs"
+      }
+    },
+    "./next/convai-handler": {
+      "import": {
+        "types": "./dist/next/convai-handler.d.ts",
+        "default": "./dist/next/convai-handler.js"
+      },
+      "require": {
+        "types": "./dist/next/convai-handler.d.cts",
+        "default": "./dist/next/convai-handler.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react/index.d.ts",
+        "default": "./dist/react/index.js"
+      },
+      "require": {
+        "types": "./dist/react/index.d.cts",
+        "default": "./dist/react/index.cjs"
+      }
+    }
   },
   "homepage": "https://github.com/itsocialist/voice",
   "repository": {
@@ -18,22 +78,20 @@
   },
   "author": "itsocialist",
   "files": [
-    "src/**/*.ts",
-    "!src/__tests__/**",
-    "next/**/*.ts",
-    "react/**/*.ts",
-    "react/**/*.tsx",
+    "dist",
     "agent.md",
     "CHANGELOG.md",
-    "README.md",
-    "tsconfig.build.json"
+    "BREAKING.md",
+    "README.md"
   ],
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
+    "build": "tsup",
+    "build:legacy": "tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
-    "check": "npx tsx scripts/check-providers.ts"
+    "check": "npx tsx scripts/check-providers.ts",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "voice",
@@ -53,8 +111,8 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "react": ">=18.0.0",
-    "react-dom": ">=18.0.0"
+    "react": ">=18 <20",
+    "react-dom": ">=18 <20"
   },
   "peerDependenciesMeta": {
     "next": {
@@ -71,6 +129,7 @@
     "@types/node": "^20.0.0",
     "@types/react": "^19.2.14",
     "react": "^19.2.5",
+    "tsup": "^8.5.1",
     "typescript": "^5.0.0",
     "vitest": "^2.0.0"
   },

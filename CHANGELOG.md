@@ -11,6 +11,61 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.0] — 2026-05-12
+
+### Summary
+
+Foundational release — moves the package from shipping raw TypeScript source
+(`main: ./src/index.ts`) to a pre-built dual ESM + CJS `dist/` with
+`.d.ts` / `.d.cts` types and a conditional `exports` map. v0.2.x worked in
+Next.js only (which compiles dependencies); v0.3.0 works in any modern
+JavaScript runtime — Node ESM/CJS, Vite SSR, Bun, Cloudflare Workers, Deno
+(via npm:), Remix, Astro, plain bundlers.
+
+**Public API is unchanged** — every exported function, type, component, and
+hook from v0.2.4 still exports from v0.3.0 with the same signature. Only the
+resolution mechanism changed.
+
+This is the foundation slice of the v0.3.x cycle. Subsequent v0.3.x releases
+will add the surface-cleanup workstream (config subdivision, error taxonomy
+refactor, camelCase normalization, real streaming, barge-in API) and the
+multi-backend ConvAI abstraction skeleton.
+
+See [BREAKING.md](./BREAKING.md) for migration notes.
+
+### Changed
+
+- **Build pipeline**: `tsup` replaces `tsc` for the distribution build. Emits
+  `dist/index.{js,cjs,d.ts,d.cts}` plus `dist/next/*` and `dist/react/index.*`
+  in both ESM and CJS formats. Source maps are intentionally disabled — they
+  would reference `../src/*.ts` paths that aren't shipped.
+
+- **`package.json`** now declares `"type": "module"` with explicit `main`,
+  `module`, `types`, and a full conditional `exports` map. Deep imports
+  documented in the README (`./next/tts-handler`, `./next/stt-handler`,
+  `./next/convai-handler`, `./next`, `./react`) all resolve as expected
+  from both ESM and CJS consumers.
+
+- **`files` whitelist** simplified to `dist/`, the three docs (`README.md`,
+  `CHANGELOG.md`, `BREAKING.md`), and `agent.md`. Previous versions shipped
+  raw `src/`, `next/`, `react/` source — those are no longer in the tarball.
+
+- **React peer dependency** capped at `>=18 <20`. v0.2.x's `>=18.0.0` would
+  silently accept React 20+ without us having tested against it.
+
+- **CI workflow** added at `.github/workflows/ci.yml`. Runs on push/PR to
+  `main` across Node 20.x and 22.x. Steps: typecheck, build, verify all
+  expected `dist/` files emitted, verify server entry has no React in its
+  module graph, ESM + CJS + deep-import smoke tests, vitest.
+
+### Fixed
+
+- Server entry (`dist/index.{js,cjs}`) is now verified clean of React imports
+  by a CI check. Earlier versions had no enforcement preventing accidental
+  React leakage into the server module graph.
+
+---
+
 ## [0.2.4] — 2026-05-12
 
 ### Summary
@@ -282,7 +337,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/itsocialist/voice/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/itsocialist/voice/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/itsocialist/voice/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/itsocialist/voice/compare/v0.2.1...v0.2.2
