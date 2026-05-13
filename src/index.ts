@@ -54,7 +54,7 @@ export { transcribeAudio, getSTTStatus } from './router/stt';
 // Profile registry
 export { VoiceRegistry, voiceRegistry, DEFAULT_VOICE_PROFILE } from './profiles/registry';
 
-// ConvAI
+// ConvAI — v0.2.x function surface (unchanged, still primary for existing code)
 export {
   createConvAIAgent,
   resolveUniversalAgent,
@@ -69,5 +69,25 @@ export type {
   ConvAILegacyCode,
   ConvAIErrorDetails,
 } from './convai/client';
+
+// ConvAI — v0.3.3+ backend abstraction (additive). Use for new code and
+// for forward-compat with v0.4+ multi-backend support (Hume / Cartesia
+// Line / OpenAI Realtime).
+export {
+  createConvAI,
+  setDefaultConvAIBackend,
+  startConvAISession,
+  resumeConvAISession,
+  endConvAISession,
+} from './convai/backend';
+export type {
+  ConvAIBackend,
+  ConvAIClient,
+  ConvAISessionHandle,
+  ConvAISessionStartOpts,
+} from './convai/backend';
+export { elevenlabs } from './convai/backends/elevenlabs';
+export type { ElevenLabsBackendOptions } from './convai/backends/elevenlabs';
+
 export { ELEVENLABS_MODELS } from './convai/models';
 export type { ElevenLabsModelId } from './convai/models';

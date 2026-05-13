@@ -11,6 +11,71 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.3] — 2026-05-13
+
+### Summary
+
+Three landings: README rewrite (Workstream A leftover from v0.3.0), barge-in
+API on `useConversation` (consumer-flagged table-stakes), and the ConvAI
+backend abstraction skeleton (Workstream C — locks provider-neutral naming
+before Hume EVI 3 lands in v0.4). All three are additive — no breaking
+changes in this release.
+
+### Added
+
+- **Full README rewrite** — reflects the v0.3.x public surface. Documents
+  the nested config shape, `ELEVENLABS_MODELS` presets, `AsyncIterable`
+  streaming, `getProviderStatus()` non-throw semantics, ConvAI lifecycle
+  patterns (ephemeral vs universal+overrides), barge-in API, and the new
+  backend abstraction. Removes stale v0.1.0/v0.2.0 caveats. Banner now
+  lists all six TTS providers including Cartesia and Deepgram.
+
+- **Barge-in API on `useConversation` / `useVoiceDuplex`:**
+  - `onInterruption?: (event: { eventId: number }) => void` option —
+    fires when ElevenLabs' server-side VAD detects the user has spoken
+    while the agent is mid-response. Passthrough from the SDK's
+    `onInterruption` callback.
+  - `lastInterruptionAt: number | null` on the result — timestamp (ms
+    since epoch) of the most recent interruption event, or `null` if
+    none this session. Resets on `start()`. Useful for UI flashes
+    without needing a separate state variable.
+
+- **ConvAI backend abstraction (Workstream C skeleton):**
+  - `ConvAIBackend` interface — `{ id, startSession, resumeSession?, endSession }`
+  - `ConvAISessionHandle` — opaque session token returned by `startSession`
+  - `ConvAISessionStartOpts` — `{ config? | agentId? + overrides? }` modes
+  - `ConvAIClient` — aggregate API returned by `createConvAI()`
+  - `createConvAI({ backend })` factory — Vercel AI SDK-style provider pattern
+  - `elevenlabs({ apiKey? })` — the only backend implementation in v0.3.3.
+    Delegates to existing v0.2.x `createConvAIAgent` / `resolveUniversalAgent` /
+    `getSignedUrlWithOverrides` / `deleteConvAIAgent` / `getSignedUrl`
+    under the hood. No runtime behavior change.
+  - Provider-neutral standalone verbs: `startConvAISession`,
+    `resumeConvAISession`, `endConvAISession` — operate against a default
+    backend (ElevenLabs by default; override with `setDefaultConvAIBackend`).
+
+  Existing v0.2.x function exports remain primary — nothing is deprecated
+  yet. The new abstraction is additive; consumers can adopt at their pace.
+  When Hume EVI 3 lands as the second backend in v0.4, this skeleton is
+  what makes it a one-import swap (`backend: hume({...})`).
+
+### Architecture notes
+
+  The expert review explicitly recommended this provider-object pattern
+  over a string-discriminator `backend: 'elevenlabs' | 'hume'` field —
+  string discriminators break when auth shapes diverge across providers
+  (Hume session-resume tokens, OpenAI Realtime ephemeral keys). The
+  `ConvAIBackend` interface composes; a string field forces switch
+  statements at every call site.
+
+  `resumeSession` semantics differ per backend: ElevenLabs treats it as
+  "re-fetch a signed URL for the same agent" (signed URLs expire ~15
+  minutes). Hume EVI 3 will use it for true session resume with carried
+  conversational state. OpenAI Realtime may not support it at all (returns
+  the handle unchanged via the default `createConvAI` shim).
+
+---
+
 ## [0.3.2] — 2026-05-12
 
 ### Summary
@@ -530,7 +595,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/itsocialist/voice/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/itsocialist/voice/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/itsocialist/voice/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/itsocialist/voice/compare/v0.2.4...v0.3.0

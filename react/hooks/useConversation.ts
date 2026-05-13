@@ -22,6 +22,17 @@ export interface UseConversationOptions {
   onStatusChange?: (status: ConversationStatus) => void;
   onError?: (error: string) => void;
   /**
+   * Fires when the agent is interrupted — typically by server-side VAD
+   * detecting that the user has started speaking while the agent is mid-
+   * response. Useful for showing "interrupted" affordances in the UI, or
+   * for telemetry counting natural barge-ins.
+   *
+   * v0.3.3+ — passthrough from the @elevenlabs/react onInterruption callback.
+   * No programmatic agent-interrupt API exists in the SDK; you can stop the
+   * session entirely via stop() if you need a hard stop.
+   */
+  onInterruption?: (event: { eventId: number }) => void;
+  /**
    * MediaDevices deviceId for the microphone to use.
    * Passed to getUserMedia and forwarded to the ElevenLabs SDK startSession.
    * Enumerate available devices with navigator.mediaDevices.enumerateDevices().
@@ -41,6 +52,13 @@ export interface UseConversationResult {
   error: string | null;
   /** Live mic permission state. Subscribes to OS-level changes via Permissions API. */
   micPermission: MicPermissionState;
+  /**
+   * Timestamp (ms since epoch) of the most recent agent interruption event,
+   * or `null` if the agent has not been interrupted this session. Resets on
+   * session start. Useful for "agent was interrupted" UI flashes without
+   * needing a separate state variable in the consumer.
+   */
+  lastInterruptionAt: number | null;
   start: () => Promise<void>;
   stop: () => Promise<void>;
   /**
@@ -63,6 +81,7 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     onMessage,
     onStatusChange,
     onError,
+    onInterruption,
     inputDeviceId,
     outputDeviceId,
   } = options;
@@ -70,6 +89,7 @@ export function useConversation(options: UseConversationOptions): UseConversatio
   const [status, setStatus] = useState<ConversationStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [micPermission, setMicPermission] = useState<MicPermissionState>('unknown');
+  const [lastInterruptionAt, setLastInterruptionAt] = useState<number | null>(null);
   const agentIdRef = useRef<string | null>(null);
   // Which SDK transport the active session is using. WebRTC initial mic track
   // ignores constraint defaults; we re-apply via changeInputDevice in onConnect.
@@ -83,9 +103,11 @@ export function useConversation(options: UseConversationOptions): UseConversatio
   const onStatusChangeRef = useRef(onStatusChange);
   const onMessageRef = useRef(onMessage);
   const onErrorRef = useRef(onError);
+  const onInterruptionRef = useRef(onInterruption);
   onStatusChangeRef.current = onStatusChange;
   onMessageRef.current = onMessage;
   onErrorRef.current = onError;
+  onInterruptionRef.current = onInterruption;
 
   // ── Mic permission monitoring (RQ-06) ─────────────────────────────────────
   // Subscribe to OS-level mic permission changes via Permissions API.
@@ -163,6 +185,15 @@ export function useConversation(options: UseConversationOptions): UseConversatio
       updateStatus('error');
       onErrorRef.current?.(err);
     },
+    // Barge-in (v0.3.3+): server-side VAD detected the user speaking while
+    // the agent was mid-response. SDK has already cut the agent's audio at
+    // the output controller. We record the timestamp for UI use and forward
+    // the event to the consumer's optional callback.
+    onInterruption: (event: { event_id: number }) => {
+      const now = Date.now();
+      setLastInterruptionAt(now);
+      onInterruptionRef.current?.({ eventId: event.event_id });
+    },
   });
 
   // Stable ref to ElevenLabs instance — avoids `elevenlabs` being in dep arrays
@@ -172,6 +203,7 @@ export function useConversation(options: UseConversationOptions): UseConversatio
 
   const start = useCallback(async () => {
     setError(null);
+    setLastInterruptionAt(null);
     updateStatus('connecting');
 
     try {
@@ -272,6 +304,7 @@ export function useConversation(options: UseConversationOptions): UseConversatio
     agentVolume: elevenRef.current.getOutputVolume(),
     error,
     micPermission,
+    lastInterruptionAt,
     start,
     stop,
     changeInputDevice,
