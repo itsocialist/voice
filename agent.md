@@ -167,9 +167,17 @@ interface ConvAIAgentConfig {
   suggestedAudioTags?: ConvAISuggestedAudioTag[]
                                  // v3-only; max 20. Constrains LLM to a preferred tag set.
                                  // Prevents invented bracket tags being spoken aloud.
+  llm?: ConvAILLMConfig          // RQ-12 — agent LLM selection (v0.2.4+)
 }
 
 type ConvAISuggestedAudioTag = string | { tag: string; description?: string }
+
+interface ConvAILLMConfig {
+  model?: string                 // e.g. 'gpt-4o-mini', 'gpt-4o', 'claude-sonnet-4', 'gemini-2.0-flash'
+                                 // omit for ElevenLabs account default
+  temperature?: number           // 0.0–1.0; omit for default
+  maxTokens?: number             // -1 for unlimited; omit for default
+}
 
 // Returned from createConvAIAgent and getSignedUrlWithOverrides
 interface ConvAIAgentResult {
@@ -186,6 +194,7 @@ interface ConvAISessionOverrides {
   turnDetection?: ConvAITurnDetection
   expressiveMode?: boolean
   suggestedAudioTags?: ConvAISuggestedAudioTag[]
+  llm?: ConvAILLMConfig          // requires workspace override permissions
 }
 ```
 
@@ -215,6 +224,7 @@ interface ConvAIAgentRouteBody {
   timeoutMs?: number
   expressiveMode?: boolean
   suggestedAudioTags?: ConvAISuggestedAudioTag[]
+  llm?: ConvAILLMConfig
 }
 
 interface STTRouteResponse {
@@ -522,7 +532,7 @@ export { convaiPost as POST, convaiDelete as DELETE } from '@itsocialist/voice/n
 
 Required fields: `systemPrompt`, `firstMessage`, `voiceId`
 
-Optional fields: `agentName`, `maxDurationSeconds`, `modelId`, `stability`, `similarityBoost`, `turnDetection`, `timeoutMs`, `expressiveMode`, `suggestedAudioTags`
+Optional fields: `agentName`, `maxDurationSeconds`, `modelId`, `stability`, `similarityBoost`, `turnDetection`, `timeoutMs`, `expressiveMode`, `suggestedAudioTags`, `llm`
 
 Response: `{ agent_id: string, conversation_token?: string, signed_url?: string }`
 

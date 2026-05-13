@@ -11,6 +11,74 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.2.4] — 2026-05-12
+
+### Summary
+
+Ships SpeakerHero RQ-12 — exposing the ConvAI LLM model so consumers can pick
+something faster than ElevenLabs' default. Lands in the **nested config shape**
+(`llm: { model, temperature, maxTokens }`) rather than flat top-level fields, on
+the recommendation of the API/SDK design review. This sets v0.2.x on the path to
+the v0.3.0 fully-subdivided config layout (`agent / llm / tts / vad / session`)
+and means consumers won't have to migrate `llmModel` → `llm.model` three weeks
+from now.
+
+Verified against the live ElevenLabs API on 2026-05-12: `llm`, `temperature`,
+and `max_tokens` fields are all accepted by `POST /v1/convai/agents/create` and
+echoed back correctly on subsequent GET. The most useful starting point for
+sub-second per-turn latency is `'gpt-4o-mini'`.
+
+### Added
+
+- `ConvAILLMConfig` interface — `{ model?, temperature?, maxTokens? }`. Exported
+  from `@itsocialist/voice`.
+
+- `ConvAIAgentConfig.llm?: ConvAILLMConfig` — agent-level LLM selection. Maps to
+  `conversation_config.agent.prompt.{llm, temperature, max_tokens}`. When omitted,
+  ElevenLabs picks its account default (typically `gpt-4o-mini`).
+
+- `ConvAISessionOverrides.llm?: ConvAILLMConfig` — per-session LLM override on
+  the universal-agent path (`getSignedUrlWithOverrides`). Override is only
+  honored if the agent's `overrides.conversation_config_override.agent.prompt`
+  permissions allow it; otherwise ElevenLabs falls back to the agent's
+  base config. Configure the permissions in the ElevenLabs dashboard.
+
+- `ConvAIAgentRouteBody.llm` — Next handler forwards the field unchanged.
+
+### Changed
+
+- `createConvAIAgent` and `resolveUniversalAgent` now both share an internal
+  `buildPromptPayload` helper, mirroring the pattern established by
+  `buildTtsPayload` in v0.2.2. Keeps the API request shape consistent across
+  all three call sites (`createConvAIAgent`, `resolveUniversalAgent`,
+  `getSignedUrlWithOverrides`).
+
+### Usage
+
+```ts
+import { createConvAIAgent, ELEVENLABS_MODELS } from '@itsocialist/voice';
+
+await createConvAIAgent({
+  systemPrompt,
+  firstMessage,
+  voiceId,
+  agentName: 'Sales Coach',
+  // RQ-12 — pick the LLM:
+  llm: {
+    model: 'gpt-4o-mini',    // or 'gpt-4o', 'claude-sonnet-4', 'gemini-2.0-flash'
+    temperature: 0.7,
+    maxTokens: 800,
+  },
+  // RQ-11 still available:
+  expressiveMode: true,
+  suggestedAudioTags: ['curious', 'skeptical'],
+  // Existing TTS knob unchanged:
+  modelId: ELEVENLABS_MODELS.V3_CONVERSATIONAL,
+});
+```
+
+---
+
 ## [0.2.3] — 2026-05-12
 
 ### Summary
@@ -214,7 +282,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/itsocialist/voice/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/itsocialist/voice/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/itsocialist/voice/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/itsocialist/voice/compare/v0.2.0...v0.2.1

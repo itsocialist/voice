@@ -139,6 +139,29 @@ export interface ConvAITurnDetection {
  */
 export type ConvAISuggestedAudioTag = string | { tag: string; description?: string };
 
+/**
+ * LLM configuration for the ConvAI agent's response generation.
+ * Maps to `conversation_config.agent.prompt.{llm, temperature, max_tokens}`.
+ * Verified against the ElevenLabs API 2026-05-12 — all three fields accepted
+ * and echoed back on subsequent GET.
+ *
+ * In v0.3.0 this nested shape will be the canonical config layout; flat
+ * top-level fields (modelId, stability, etc) will move into sibling groups
+ * (tts, vad, session). Adopt the nested shape now to avoid migration churn.
+ */
+export interface ConvAILLMConfig {
+  /**
+   * LLM identifier as accepted by ElevenLabs ConvAI. Common values:
+   * `'gpt-4o-mini'`, `'gpt-4o'`, `'claude-sonnet-4'`, `'gemini-2.0-flash'`.
+   * When omitted, ElevenLabs picks its account default.
+   */
+  model?: string;
+  /** Sampling temperature 0.0–1.0. When omitted, ElevenLabs default applies. */
+  temperature?: number;
+  /** Max output tokens. Pass `-1` for unlimited. When omitted, default applies. */
+  maxTokens?: number;
+}
+
 export interface ConvAIAgentConfig {
   systemPrompt: string;
   firstMessage: string;
@@ -179,6 +202,13 @@ export interface ConvAIAgentConfig {
    * sent as-is; objects let you attach a `description` usage hint.
    */
   suggestedAudioTags?: ConvAISuggestedAudioTag[];
+  /**
+   * LLM that powers the agent's response generation. Distinct from `modelId`
+   * (which is the TTS model). When omitted, ElevenLabs picks its account
+   * default (typically `gpt-4o-mini`). For sub-second per-turn latency,
+   * `'gpt-4o-mini'` is the recommended starting point.
+   */
+  llm?: ConvAILLMConfig;
 }
 
 export interface ConvAIAgentResult {
@@ -200,6 +230,7 @@ export interface ConvAISessionOverrides {
   turnDetection?: ConvAITurnDetection;
   expressiveMode?: boolean;
   suggestedAudioTags?: ConvAISuggestedAudioTag[];
+  llm?: ConvAILLMConfig;
 }
 
 // ── Next.js Route Handler Types ──
@@ -235,4 +266,5 @@ export interface ConvAIAgentRouteBody {
   timeoutMs?: number;
   expressiveMode?: boolean;
   suggestedAudioTags?: ConvAISuggestedAudioTag[];
+  llm?: ConvAILLMConfig;
 }

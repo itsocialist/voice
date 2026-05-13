@@ -6,7 +6,7 @@
  * so consuming apps can choose whichever the ElevenLabs SDK version expects.
  */
 
-import type { ConvAIAgentConfig, ConvAIAgentResult, ConvAISessionOverrides } from '../types';
+import type { ConvAIAgentConfig, ConvAIAgentResult, ConvAILLMConfig, ConvAISessionOverrides } from '../types';
 
 const ELEVENLABS_API = 'https://api.elevenlabs.io/v1';
 
@@ -58,6 +58,21 @@ function normalizeAudioTags(
 ): Array<{ tag: string; description?: string }> | undefined {
   if (!tags || tags.length === 0) return undefined;
   return tags.map(t => (typeof t === 'string' ? { tag: t } : t));
+}
+
+/**
+ * Build the `prompt` payload sent to ElevenLabs, threading the LLM config.
+ * Verified 2026-05-12: API accepts and persists `llm`, `temperature`,
+ * `max_tokens` fields on agent creation. Omitted fields fall back to
+ * ElevenLabs' account defaults.
+ */
+function buildPromptPayload(systemPrompt: string, llm?: ConvAILLMConfig) {
+  return {
+    prompt: systemPrompt,
+    ...(llm?.model !== undefined && { llm: llm.model }),
+    ...(llm?.temperature !== undefined && { temperature: llm.temperature }),
+    ...(llm?.maxTokens !== undefined && { max_tokens: llm.maxTokens }),
+  };
 }
 
 /**
@@ -118,7 +133,8 @@ export async function createConvAIAgent(
       name: config.agentName,
       conversation_config: {
         agent: {
-          prompt: { prompt: config.systemPrompt },
+          // RQ-12: prompt may now carry llm/temperature/max_tokens.
+          prompt: buildPromptPayload(config.systemPrompt, config.llm),
           first_message: config.firstMessage,
           // max_duration_seconds: SpeakerHero uses 3600 (1hr). ElevenLabs default is 600s (10min).
           max_duration_seconds: config.maxDurationSeconds ?? 3600,
@@ -195,7 +211,7 @@ export async function resolveUniversalAgent(
       name,
       conversation_config: {
         agent: {
-          prompt: { prompt: baseConfig.systemPrompt },
+          prompt: buildPromptPayload(baseConfig.systemPrompt, baseConfig.llm),
           first_message: baseConfig.firstMessage,
           max_duration_seconds: baseConfig.maxDurationSeconds ?? 3600,
         },
@@ -234,11 +250,39 @@ export async function getSignedUrlWithOverrides(
   const turnPayload = buildTurnDetectionPayload(overrides.turnDetection);
 
   const conversationConfigOverride: Record<string, unknown> = {};
-  if (overrides.systemPrompt !== undefined || overrides.firstMessage !== undefined) {
-    conversationConfigOverride.agent = {
-      ...(overrides.systemPrompt !== undefined && { prompt: { prompt: overrides.systemPrompt } }),
-      ...(overrides.firstMessage !== undefined && { first_message: overrides.firstMessage }),
-    };
+  const hasLLMOverride = overrides.llm && (
+    overrides.llm.model !== undefined ||
+    overrides.llm.temperature !== undefined ||
+    overrides.llm.maxTokens !== undefined
+  );
+  if (overrides.systemPrompt !== undefined || overrides.firstMessage !== undefined || hasLLMOverride) {
+    const agentOverride: Record<string, unknown> = {};
+    if (overrides.systemPrompt !== undefined || hasLLMOverride) {
+      // Build prompt override field-by-field — never include a field that
+      // wasn't explicitly overridden, since ElevenLabs treats every included
+      // key as an override (sending prompt: '' would wipe the base systemPrompt).
+      // Note: per-session prompt/llm overrides require the universal agent's
+      // workspace-level override permissions to allow them (see the agent's
+      // overrides.conversation_config_override.agent.prompt.{prompt,llm} flags).
+      const promptOverride: Record<string, unknown> = {};
+      if (overrides.systemPrompt !== undefined) {
+        promptOverride.prompt = overrides.systemPrompt;
+      }
+      if (overrides.llm?.model !== undefined) {
+        promptOverride.llm = overrides.llm.model;
+      }
+      if (overrides.llm?.temperature !== undefined) {
+        promptOverride.temperature = overrides.llm.temperature;
+      }
+      if (overrides.llm?.maxTokens !== undefined) {
+        promptOverride.max_tokens = overrides.llm.maxTokens;
+      }
+      agentOverride.prompt = promptOverride;
+    }
+    if (overrides.firstMessage !== undefined) {
+      agentOverride.first_message = overrides.firstMessage;
+    }
+    conversationConfigOverride.agent = agentOverride;
   }
   const ttsOverride: Record<string, unknown> = {};
   if (overrides.voiceId !== undefined) {

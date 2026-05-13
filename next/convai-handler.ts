@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       timeoutMs,
       expressiveMode,
       suggestedAudioTags,
+      llm,
     } = body;
 
     if (!systemPrompt || !firstMessage || !voiceId) {
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
         timeoutMs,
         expressiveMode,
         suggestedAudioTags,
+        llm,
       },
       apiKey
     );
