@@ -150,7 +150,6 @@ export class ElevenLabsProvider implements TTSProvider {
       contentType: `audio/${format === 'mp3' ? 'mpeg' : format}`,
       provider: 'elevenlabs',
       toReadableStream: () => stream,
-      stream, // back-compat, deprecated
     };
   }
 }

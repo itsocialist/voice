@@ -11,6 +11,116 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.4.0] — 2026-05-13
+
+### Summary
+
+Major-cycle release. Two coordinated landings: **Hume EVI 3 as the second
+ConvAI backend** (the strategic anchor — the empathy axis for sales-sim use
+cases) and **hard removals of the three deprecations that lived through
+v0.3.x with one-cycle back-compat**. The Hume implementation satisfies one
+v1.0 gate (every public abstraction now has at least one second impl).
+
+### Added
+
+- **`hume({ apiKey?, secretKey?, useAccessToken?, apiBaseUrl? })` backend** —
+  implementing the `ConvAIBackend` interface shipped in v0.3.3.
+
+  Wire it via either pattern:
+
+  ```ts
+  import { createConvAI, hume } from '@itsocialist/voice';
+
+  const convai = createConvAI({
+    backend: hume({
+      apiKey: process.env.HUME_API_KEY,
+      secretKey: process.env.HUME_SECRET_KEY,
+    }),
+  });
+
+  const handle = await convai.startSession({
+    config: {
+      agent: { systemPrompt, firstMessage, voiceId: 'ITO', agentName: 'Coach' },
+      llm: { model: 'claude-sonnet-4', temperature: 0.7 },
+    },
+  });
+
+  // handle.signedUrl is the wss:// URL to connect with.
+  ```
+
+  Implementation calls Hume's REST API directly (`POST /v0/evi/configs`,
+  `POST /oauth2-cc/token`). No `hume` npm SDK dependency added — voice-lib
+  keeps its "no runtime deps beyond @elevenlabs/*" posture.
+
+  **Mapping notes** (Hume's API differs from ElevenLabs ConvAI in several
+  load-bearing ways):
+
+  - `agentId` ↔ Hume `config_id` (versioned — exposed via `_ctx.configVersion`)
+  - No signed-URL handshake step. The `wss://api.hume.ai/v0/evi?access_token=...&config_id=...`
+    URL with the OAuth access token *is* the credential.
+  - No `first_message` field on Hume — maps to `event_messages.on_new_chat.text`
+  - No per-session emotion-direction knob — `tts.suggestedAudioTags` is
+    silently ignored on Hume (different emotion model: bake into voice's
+    `description` or system prompt).
+  - LLM provider auto-inferred from model name prefix (`gpt-*` → OPEN_AI,
+    `claude-*` → ANTHROPIC, `gemini-*` → GOOGLE, `grok-*` → X_AI, etc).
+    Models not matching a prefix fall back to `CUSTOM_LANGUAGE_MODEL`.
+  - **Session resume is real** (Hume supports it via `chat_group_id`).
+    Capture `chat_group_id` from the server's first `chat_metadata` WS
+    message and stuff it into `handle._ctx.chatGroupId` before calling
+    `convai.resumeSession(handle)` to reconnect with conversational state.
+  - **Concurrent connection caps are low** on Hume's paid plans
+    (1 free / 5 starter / 10 pro / 20 scale). Hitting it returns
+    `ConvAIError { type: 'rate_limit', retryable: true, code: 'HUME_CONCURRENT_LIMIT' }`.
+
+- **Hume types exported**: `HumeBackendOptions`.
+
+- **`ConvAIProviderId` already supported `'hume'`** since v0.3.4 (type slot
+  reserved); it now has a real implementation behind it.
+
+### Removed (one-cycle deprecations from v0.3.x expire)
+
+- **Flat `ConvAIAgentConfig` / `ConvAISessionOverrides` shape removed**.
+  v0.2.x → v0.3.0 introduced the nested shape with one-cycle back-compat;
+  v0.4.0 cuts it. Calls like `createConvAIAgent({ systemPrompt, firstMessage,
+  voiceId, agentName, modelId, ... })` are now compile-time errors. Use the
+  nested shape:
+  ```ts
+  createConvAIAgent({
+    agent: { systemPrompt, firstMessage, voiceId, agentName },
+    llm: { model: 'gpt-4o-mini' },
+    tts: { modelId: 'eleven_flash_v2_5' },
+    vad: { type: 'server_vad', silenceDurationMs: 400 },
+    session: { maxDurationSeconds: 1200 },
+  });
+  ```
+  Type aliases `ConvAIAgentConfigNested` and `ConvAISessionOverridesNested`
+  retained for v0.3.x import compat; they now point at the canonical shapes.
+
+- **`ConvAITurnDetection.silence_duration_ms` removed** (snake_case wire-leak
+  fix from v0.3.1). Use `silenceDurationMs`.
+
+- **`TTSStreamResponse.stream` removed** (deprecated v0.3.2 alongside the
+  introduction of `chunks: AsyncIterable<Uint8Array>` + `toReadableStream()`).
+  Use either of those instead.
+
+### Behavior changes
+
+- **Next.js ConvAI route handler now rejects flat-shape POST bodies**. The
+  `body.agent.{systemPrompt,firstMessage,voiceId}` nested fields are required;
+  flat top-level fields produce `400 agent.systemPrompt is required` errors.
+
+See [BREAKING.md](./BREAKING.md) for the full migration walk-through.
+
+### Internal
+
+- All deprecation-warning runtime infrastructure removed (`warnOnce` helper,
+  `normalizeConfig`, `normalizeOverrides`, `readSilenceDurationMs`). The
+  client codebase is materially smaller and there are no console.warn flags
+  firing for valid usage.
+
+---
+
 ## [0.3.4] — 2026-05-13
 
 ### Summary
@@ -638,7 +748,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/itsocialist/voice/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/itsocialist/voice/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/itsocialist/voice/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/itsocialist/voice/compare/v0.3.1...v0.3.2

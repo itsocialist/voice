@@ -5,6 +5,101 @@ For the additive changes that ride alongside, see [CHANGELOG.md](./CHANGELOG.md)
 
 ---
 
+## v0.4.0 — 2026-05-13
+
+The three deprecations carried through v0.3.x with one-cycle back-compat
+are now hard-removed. If you were on v0.3.4 and your code didn't emit any
+`[voice-lib] DEPRECATION:` runtime warnings, you have **zero work to do
+for v0.4.0**. Otherwise, the warnings told you which fields to migrate.
+
+### 1. Flat `ConvAIAgentConfig` shape removed
+
+**What changed**
+
+v0.2.x flat shape (`{ systemPrompt, firstMessage, voiceId, agentName, modelId, stability, ... }`
+all at top level) is no longer accepted. The `ConvAIAgentConfig` type
+narrows to the nested form only.
+
+**What you need to do**
+
+```diff
+- await createConvAIAgent({
+-   systemPrompt,
+-   firstMessage,
+-   voiceId,
+-   agentName,
+-   maxDurationSeconds: 1200,
+-   modelId: 'eleven_flash_v2_5',
+-   stability: 0.5,
+-   similarityBoost: 0.75,
+-   turnDetection: { type: 'server_vad', silence_duration_ms: 400 },
+-   timeoutMs: 15000,
+-   expressiveMode: true,
+-   suggestedAudioTags: ['curious'],
+-   llm: { model: 'gpt-4o-mini' },
+- });
++ await createConvAIAgent({
++   agent: { systemPrompt, firstMessage, voiceId, agentName },
++   session: { maxDurationSeconds: 1200, timeoutMs: 15000 },
++   tts: {
++     modelId: 'eleven_flash_v2_5',
++     stability: 0.5,
++     similarityBoost: 0.75,
++     expressiveMode: true,
++     suggestedAudioTags: ['curious'],
++   },
++   vad: { type: 'server_vad', silenceDurationMs: 400 },
++   llm: { model: 'gpt-4o-mini' },
++ });
+```
+
+Same shape applies to `getSignedUrlWithOverrides` and the `/api/convai/agent`
+POST body. The Next.js handler now returns
+`400 agent.systemPrompt is required` on flat bodies.
+
+### 2. `ConvAITurnDetection.silence_duration_ms` removed
+
+**What changed**
+
+Use `silenceDurationMs` (introduced v0.3.1). Both forms accepted for
+v0.3.x with a deprecation warning; v0.4.0 cuts the snake_case form.
+
+```diff
+  vad: {
+    type: 'server_vad',
+-   silence_duration_ms: 400,
++   silenceDurationMs: 400,
+  }
+```
+
+### 3. `TTSStreamResponse.stream` removed
+
+**What changed**
+
+The legacy `stream: ReadableStream<Uint8Array>` field is gone. Use
+`chunks: AsyncIterable<Uint8Array>` (for `for await`) or `toReadableStream()`
+(for `new Response(...)` bodies).
+
+```diff
+- new Response(result.stream, { headers: { 'Content-Type': result.contentType } })
++ new Response(result.toReadableStream(), { headers: { 'Content-Type': result.contentType } })
+```
+
+```diff
+- for await (const chunk of result.stream) { /* ... */ }
++ for await (const chunk of result.chunks) { /* ... */ }
+```
+
+### Not breaking but worth mentioning
+
+- **Hume EVI 3 backend now available** (`import { hume } from '@itsocialist/voice'`).
+  Additive — existing ElevenLabs ConvAI usage unchanged.
+- Type aliases `ConvAIAgentConfigNested` and `ConvAISessionOverridesNested`
+  remain as soft aliases pointing at the canonical types, so v0.3.x type
+  imports keep working. Will be removed in v0.5.0.
+
+---
+
 ## v0.3.2 — 2026-05-12
 
 Workstream B slice 2. Two technically-breaking changes; the rest of the

@@ -196,7 +196,6 @@ function makeStreamResponse(
     contentType,
     provider,
     toReadableStream: () => stream,
-    stream,
   };
 }
 

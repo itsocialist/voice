@@ -18,7 +18,6 @@ export type {
   STTProviderStatus,
   ConvAIAgentConfig,
   ConvAIAgentConfigNested,
-  ConvAIAgentConfigFlat,
   ConvAIAgentIdentity,
   ConvAITTSConfigGroup,
   ConvAISessionPolicy,
@@ -26,7 +25,6 @@ export type {
   ConvAITurnDetection,
   ConvAISessionOverrides,
   ConvAISessionOverridesNested,
-  ConvAISessionOverridesFlat,
   ConvAISuggestedAudioTag,
   ConvAILLMConfig,
   TTSRouteBody,
@@ -88,6 +86,8 @@ export type {
 } from './convai/backend';
 export { elevenlabs } from './convai/backends/elevenlabs';
 export type { ElevenLabsBackendOptions } from './convai/backends/elevenlabs';
+export { hume } from './convai/backends/hume';
+export type { HumeBackendOptions } from './convai/backends/hume';
 
 export { ELEVENLABS_MODELS } from './convai/models';
 export type { ElevenLabsModelId } from './convai/models';

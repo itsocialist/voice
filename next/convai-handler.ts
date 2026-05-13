@@ -26,19 +26,9 @@ function json(data: unknown, init?: ResponseInit): Response {
 }
 
 /**
- * Required-field check on the request body. Both nested and flat shapes
- * are accepted — we look for the systemPrompt/firstMessage/voiceId fields
- * wherever they live. The client normalizes the shape before any API call.
+ * Required-field check on the request body. Nested shape only since v0.4.0.
  */
 function validateBody(body: ConvAIAgentRouteBody): string | null {
-  if ('systemPrompt' in body) {
-    // Flat shape
-    if (!body.systemPrompt) return 'systemPrompt is required';
-    if (!body.firstMessage) return 'firstMessage is required';
-    if (!body.voiceId) return 'voiceId is required';
-    return null;
-  }
-  // Nested shape
   const agent = body.agent;
   if (!agent?.systemPrompt) return 'agent.systemPrompt is required';
   if (!agent?.firstMessage) return 'agent.firstMessage is required';
@@ -59,12 +49,8 @@ export async function POST(request: Request) {
       return json({ error: validationError }, { status: 400 });
     }
 
-    // Default agentName if missing (both shapes).
-    if ('systemPrompt' in body) {
-      body.agentName = body.agentName ?? 'Agent';
-    } else {
-      body.agent = { ...body.agent, agentName: body.agent.agentName ?? 'Agent' };
-    }
+    // Default agentName if missing
+    body.agent = { ...body.agent, agentName: body.agent.agentName ?? 'Agent' };
 
     const result = await createConvAIAgent(body, apiKey);
 

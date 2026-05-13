@@ -78,26 +78,20 @@ export interface TTSResponse {
  * Returned by `synthesizeSpeechStream()`. Stream begins arriving before
  * full synthesis completes (assuming the provider supports real streaming).
  *
- * v0.3.2+: `chunks` (AsyncIterable) is the canonical shape; use
- * `for await (const chunk of result.chunks) {...}`. `toReadableStream()`
- * adapts to a Web ReadableStream for Response bodies. The legacy `stream`
- * field is preserved for back-compat and will be removed in v0.4.0.
+ * v0.4.0 removed the legacy `stream` field. Use `chunks` (AsyncIterable)
+ * with `for await`, or `toReadableStream()` for a Web ReadableStream.
  */
 export interface TTSStreamResponse {
   /**
-   * AsyncIterable of audio chunks (canonical from v0.3.2+).
-   * Modern runtimes implement AsyncIterable on ReadableStream, so this
-   * is the same underlying object as `stream` — just typed for composability.
+   * AsyncIterable of audio chunks. Modern runtimes implement AsyncIterable
+   * on ReadableStream, so this is the same underlying object as the one
+   * `toReadableStream()` returns — just typed for composability.
    */
   chunks: AsyncIterable<Uint8Array>;
   contentType: string;
   provider: TTSProviderName;
   /** Adapter when you need a Web ReadableStream (e.g. for `new Response(stream)`). */
   toReadableStream(): ReadableStream<Uint8Array>;
-  /**
-   * @deprecated use `chunks` or `toReadableStream()` — removed in v0.4.0.
-   */
-  stream: ReadableStream<Uint8Array>;
 }
 
 /** Returned when preferredProvider === 'browser' */
@@ -179,10 +173,8 @@ export interface STTProviderStatus {
 /**
  * VAD turn detection config for ConvAI sessions.
  *
- * v0.3.1 introduced camelCase field names (`silenceDurationMs`) on the
- * public surface. The snake_case form (`silence_duration_ms`) is the
- * ElevenLabs wire format and is still accepted for one cycle with a
- * runtime deprecation warning. Will be removed in v0.4.0.
+ * v0.4.0 removed the legacy snake_case `silence_duration_ms` field. Use
+ * `silenceDurationMs` (introduced v0.3.1).
  */
 export interface ConvAITurnDetection {
   type: 'server_vad';
@@ -190,8 +182,6 @@ export interface ConvAITurnDetection {
   silenceDurationMs?: number;
   /** VAD sensitivity (0.0–1.0). */
   threshold?: number;
-  /** @deprecated use `silenceDurationMs` — will be removed in v0.4.0. */
-  silence_duration_ms?: number;
 }
 
 /**
@@ -285,7 +275,7 @@ export interface ConvAISessionPolicy {
 }
 
 /**
- * Canonical nested ConvAI agent config (v0.3.1+).
+ * ConvAI agent config (v0.4.0+).
  *
  *   agent — systemPrompt / firstMessage / voiceId / agentName
  *   llm — model / temperature / maxTokens (ConvAI agent LLM, v0.2.4+)
@@ -293,11 +283,10 @@ export interface ConvAISessionPolicy {
  *   vad — turn-detection config
  *   session — maxDurationSeconds / timeoutMs
  *
- * Flat-shape input (every field at top level, as in v0.2.x) is still
- * accepted by the public functions for one release cycle with a runtime
- * deprecation warning. Will be removed in v0.4.0.
+ * v0.4.0 removed the legacy flat shape from v0.2.x (single top-level
+ * `systemPrompt`, `voiceId`, etc.). Use the nested shape.
  */
-export interface ConvAIAgentConfigNested {
+export interface ConvAIAgentConfig {
   agent: ConvAIAgentIdentity;
   llm?: ConvAILLMConfig;
   tts?: ConvAITTSConfigGroup;
@@ -306,34 +295,10 @@ export interface ConvAIAgentConfigNested {
 }
 
 /**
- * Legacy v0.2.x flat config shape. Every consumer of `createConvAIAgent`
- * before v0.3.1 used this shape. Still accepted on input for v0.3.x with
- * a one-time runtime warning per process. Will be removed in v0.4.0.
- *
- * @deprecated use {@link ConvAIAgentConfigNested}
+ * @deprecated alias retained for v0.3.x type imports. Will be removed
+ * in v0.5.0. Use `ConvAIAgentConfig` directly.
  */
-export interface ConvAIAgentConfigFlat {
-  systemPrompt: string;
-  firstMessage: string;
-  voiceId: string;
-  agentName: string;
-  maxDurationSeconds?: number;
-  modelId?: string;
-  stability?: number;
-  similarityBoost?: number;
-  turnDetection?: ConvAITurnDetection;
-  timeoutMs?: number;
-  expressiveMode?: boolean;
-  suggestedAudioTags?: ConvAISuggestedAudioTag[];
-  llm?: ConvAILLMConfig;
-}
-
-/**
- * Public type accepted by `createConvAIAgent` and `resolveUniversalAgent`.
- * Nested in v0.3.1+, flat for v0.2.x back-compat. Functions normalize both
- * forms to the nested shape internally.
- */
-export type ConvAIAgentConfig = ConvAIAgentConfigNested | ConvAIAgentConfigFlat;
+export type ConvAIAgentConfigNested = ConvAIAgentConfig;
 
 export interface ConvAIAgentResult {
   agentId: string;
@@ -347,12 +312,12 @@ export interface ConvAIAgentResult {
  * Per-session overrides passed to `getSignedUrlWithOverrides()`.
  * Applied on top of a cached universal agent's base config.
  *
- * Nested in v0.3.1+; the flat field set is still accepted for v0.3.x with
- * a runtime deprecation warning. Override is only honored if the agent's
+ * v0.4.0 removed the legacy flat overrides shape from v0.2.x. Use the
+ * nested shape directly. Override is only honored if the agent's
  * `overrides.conversation_config_override.agent.prompt` permissions allow
  * it — configure in the ElevenLabs dashboard.
  */
-export interface ConvAISessionOverridesNested {
+export interface ConvAISessionOverrides {
   agent?: Partial<ConvAIAgentIdentity>;
   llm?: ConvAILLMConfig;
   tts?: ConvAITTSConfigGroup;
@@ -360,20 +325,10 @@ export interface ConvAISessionOverridesNested {
 }
 
 /**
- * Legacy v0.2.x flat overrides shape.
- * @deprecated use {@link ConvAISessionOverridesNested}
+ * @deprecated alias retained for v0.3.x type imports. Will be removed
+ * in v0.5.0. Use `ConvAISessionOverrides` directly.
  */
-export interface ConvAISessionOverridesFlat {
-  systemPrompt?: string;
-  firstMessage?: string;
-  voiceId?: string;
-  turnDetection?: ConvAITurnDetection;
-  expressiveMode?: boolean;
-  suggestedAudioTags?: ConvAISuggestedAudioTag[];
-  llm?: ConvAILLMConfig;
-}
-
-export type ConvAISessionOverrides = ConvAISessionOverridesNested | ConvAISessionOverridesFlat;
+export type ConvAISessionOverridesNested = ConvAISessionOverrides;
 
 // ── Next.js Route Handler Types ──
 

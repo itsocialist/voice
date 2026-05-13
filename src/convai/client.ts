@@ -17,11 +17,9 @@
 
 import type {
   ConvAIAgentConfig,
-  ConvAIAgentConfigNested,
   ConvAIAgentResult,
   ConvAILLMConfig,
   ConvAISessionOverrides,
-  ConvAISessionOverridesNested,
   ConvAITurnDetection,
 } from '../types';
 
@@ -199,121 +197,12 @@ async function errorFromResponse(
   });
 }
 
-// ── Deprecation warnings (one-shot per process) ──────────────────────────────
-
-const warnedOnce = new Set<string>();
-function warnOnce(key: string, message: string): void {
-  if (warnedOnce.has(key)) return;
-  warnedOnce.add(key);
-  // eslint-disable-next-line no-console
-  console.warn(`[voice-lib] DEPRECATION: ${message}`);
-}
-
-// ── Config normalization (flat → nested) ─────────────────────────────────────
-
-function isFlatConfig(config: ConvAIAgentConfig): boolean {
-  // Flat shape has top-level systemPrompt; nested has agent.systemPrompt.
-  return 'systemPrompt' in config;
-}
-
-function isFlatOverrides(overrides: ConvAISessionOverrides): boolean {
-  return (
-    'systemPrompt' in overrides ||
-    'firstMessage' in overrides ||
-    'voiceId' in overrides ||
-    'turnDetection' in overrides ||
-    'expressiveMode' in overrides ||
-    'suggestedAudioTags' in overrides
-  );
-}
-
-function normalizeConfig(config: ConvAIAgentConfig): ConvAIAgentConfigNested {
-  if (isFlatConfig(config)) {
-    warnOnce(
-      'flat-config',
-      'Flat ConvAIAgentConfig shape (systemPrompt, modelId, etc. at the top level) is deprecated. ' +
-        'Move to nested shape { agent: {...}, llm: {...}, tts: {...}, vad: {...}, session: {...} } ' +
-        'before v0.4.0 — flat shape will be removed then.',
-    );
-    const flat = config as Extract<ConvAIAgentConfig, { systemPrompt: string }>;
-    return {
-      agent: {
-        systemPrompt: flat.systemPrompt,
-        firstMessage: flat.firstMessage,
-        voiceId: flat.voiceId,
-        agentName: flat.agentName,
-      },
-      llm: flat.llm,
-      tts: {
-        modelId: flat.modelId,
-        stability: flat.stability,
-        similarityBoost: flat.similarityBoost,
-        expressiveMode: flat.expressiveMode,
-        suggestedAudioTags: flat.suggestedAudioTags,
-      },
-      vad: flat.turnDetection,
-      session: {
-        maxDurationSeconds: flat.maxDurationSeconds,
-        timeoutMs: flat.timeoutMs,
-      },
-    };
-  }
-  return config as ConvAIAgentConfigNested;
-}
-
-function normalizeOverrides(overrides: ConvAISessionOverrides): ConvAISessionOverridesNested {
-  if (isFlatOverrides(overrides)) {
-    warnOnce(
-      'flat-overrides',
-      'Flat ConvAISessionOverrides shape is deprecated. Move to nested shape ' +
-        '{ agent: {...}, llm: {...}, tts: {...}, vad: {...} } before v0.4.0.',
-    );
-    const flat = overrides as Extract<ConvAISessionOverrides, { systemPrompt?: string }>;
-    const nested: ConvAISessionOverridesNested = {};
-    if (flat.systemPrompt !== undefined || flat.firstMessage !== undefined) {
-      nested.agent = {};
-      if (flat.systemPrompt !== undefined) nested.agent.systemPrompt = flat.systemPrompt;
-      if (flat.firstMessage !== undefined) nested.agent.firstMessage = flat.firstMessage;
-    }
-    if (flat.llm) nested.llm = flat.llm;
-    if (flat.voiceId !== undefined || flat.expressiveMode !== undefined || flat.suggestedAudioTags) {
-      nested.tts = {};
-      if (flat.voiceId !== undefined) nested.tts.modelId = nested.tts.modelId; // placeholder noop; voiceId handled separately
-      // voiceId lives outside ConvAITTSConfigGroup in v0.3.1 — keep it on tts as a passthrough
-      if (flat.expressiveMode !== undefined) nested.tts.expressiveMode = flat.expressiveMode;
-      if (flat.suggestedAudioTags) nested.tts.suggestedAudioTags = flat.suggestedAudioTags;
-    }
-    if (flat.turnDetection) nested.vad = flat.turnDetection;
-    // voiceId is special — it's part of agent identity in nested shape, but the
-    // override path treats it as a TTS override. Stash it in agent for symmetry.
-    if (flat.voiceId !== undefined) {
-      nested.agent = { ...(nested.agent ?? {}), voiceId: flat.voiceId };
-    }
-    return nested;
-  }
-  return overrides as ConvAISessionOverridesNested;
-}
-
 // ── Payload builders (operate on canonical nested shape) ─────────────────────
-
-function readSilenceDurationMs(td: ConvAITurnDetection): number | undefined {
-  // Prefer camelCase; fall back to legacy snake_case with a deprecation warning.
-  if (td.silenceDurationMs !== undefined) return td.silenceDurationMs;
-  if (td.silence_duration_ms !== undefined) {
-    warnOnce(
-      'snake-case-silence-duration-ms',
-      'ConvAITurnDetection.silence_duration_ms is deprecated. Rename to silenceDurationMs ' +
-        'before v0.4.0 — snake_case form will be removed then.',
-    );
-    return td.silence_duration_ms;
-  }
-  return undefined;
-}
 
 function buildTurnDetectionPayload(turnDetection?: ConvAITurnDetection) {
   if (!turnDetection) return undefined;
   return {
-    silence_duration_ms: readSilenceDurationMs(turnDetection),
+    silence_duration_ms: turnDetection.silenceDurationMs,
     threshold: turnDetection.threshold,
   };
 }
@@ -339,8 +228,8 @@ function buildPromptPayload(systemPrompt: string, llm?: ConvAILLMConfig) {
 }
 
 function buildTtsPayload(
-  agent: ConvAIAgentConfigNested['agent'],
-  tts: ConvAIAgentConfigNested['tts'],
+  agent: ConvAIAgentConfig['agent'],
+  tts: ConvAIAgentConfig['tts'],
 ) {
   const modelId = tts?.modelId ?? 'eleven_v3_conversational';
   const expressiveMode = tts?.expressiveMode ?? isV3Model(modelId);
@@ -374,25 +263,24 @@ export async function createConvAIAgent(
   config: ConvAIAgentConfig,
   apiKey?: string,
 ): Promise<ConvAIAgentResult> {
-  const nested = normalizeConfig(config);
   const key = resolveKey(apiKey);
-  const timeout = nested.session?.timeoutMs ?? 15000;
-  const turnPayload = buildTurnDetectionPayload(nested.vad);
+  const timeout = config.session?.timeoutMs ?? 15000;
+  const turnPayload = buildTurnDetectionPayload(config.vad);
 
   // Step 1: Create agent
   const agentRes = await fetch(`${ELEVENLABS_API}/convai/agents/create`, {
     method: 'POST',
     headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: nested.agent.agentName,
+      name: config.agent.agentName,
       conversation_config: {
         agent: {
-          prompt: buildPromptPayload(nested.agent.systemPrompt, nested.llm),
-          first_message: nested.agent.firstMessage,
+          prompt: buildPromptPayload(config.agent.systemPrompt, config.llm),
+          first_message: config.agent.firstMessage,
           // ElevenLabs default is 600s (10min); voice-lib default is 3600s (1hr).
-          max_duration_seconds: nested.session?.maxDurationSeconds ?? 3600,
+          max_duration_seconds: config.session?.maxDurationSeconds ?? 3600,
         },
-        tts: buildTtsPayload(nested.agent, nested.tts),
+        tts: buildTtsPayload(config.agent, config.tts),
         ...(turnPayload && { turn: turnPayload }),
       },
     }),
@@ -450,10 +338,9 @@ export async function resolveUniversalAgent(
   baseConfig: ConvAIAgentConfig,
   apiKey?: string,
 ): Promise<string> {
-  const nested = normalizeConfig(baseConfig);
   const key = resolveKey(apiKey);
-  const timeout = nested.session?.timeoutMs ?? 15000;
-  const turnPayload = buildTurnDetectionPayload(nested.vad);
+  const timeout = baseConfig.session?.timeoutMs ?? 15000;
+  const turnPayload = buildTurnDetectionPayload(baseConfig.vad);
 
   const res = await fetch(`${ELEVENLABS_API}/convai/agents/create`, {
     method: 'POST',
@@ -462,11 +349,11 @@ export async function resolveUniversalAgent(
       name,
       conversation_config: {
         agent: {
-          prompt: buildPromptPayload(nested.agent.systemPrompt, nested.llm),
-          first_message: nested.agent.firstMessage,
-          max_duration_seconds: nested.session?.maxDurationSeconds ?? 3600,
+          prompt: buildPromptPayload(baseConfig.agent.systemPrompt, baseConfig.llm),
+          first_message: baseConfig.agent.firstMessage,
+          max_duration_seconds: baseConfig.session?.maxDurationSeconds ?? 3600,
         },
-        tts: buildTtsPayload(nested.agent, nested.tts),
+        tts: buildTtsPayload(baseConfig.agent, baseConfig.tts),
         ...(turnPayload && { turn: turnPayload }),
       },
     }),
@@ -504,21 +391,20 @@ export async function getSignedUrlWithOverrides(
   overrides: ConvAISessionOverrides,
   apiKey?: string,
 ): Promise<ConvAIAgentResult> {
-  const nested = normalizeOverrides(overrides);
   const key = resolveKey(apiKey);
   const timeoutMs = 15000;
-  const turnPayload = buildTurnDetectionPayload(nested.vad);
+  const turnPayload = buildTurnDetectionPayload(overrides.vad);
 
   const conversationConfigOverride: Record<string, unknown> = {};
 
   // Agent overrides: prompt (with llm/temperature/max_tokens), first_message
-  const hasLLMOverride = nested.llm && (
-    nested.llm.model !== undefined ||
-    nested.llm.temperature !== undefined ||
-    nested.llm.maxTokens !== undefined
+  const hasLLMOverride = overrides.llm && (
+    overrides.llm.model !== undefined ||
+    overrides.llm.temperature !== undefined ||
+    overrides.llm.maxTokens !== undefined
   );
-  const systemPromptOverride = nested.agent?.systemPrompt;
-  const firstMessageOverride = nested.agent?.firstMessage;
+  const systemPromptOverride = overrides.agent?.systemPrompt;
+  const firstMessageOverride = overrides.agent?.firstMessage;
   if (systemPromptOverride !== undefined || firstMessageOverride !== undefined || hasLLMOverride) {
     const agentOverride: Record<string, unknown> = {};
     if (systemPromptOverride !== undefined || hasLLMOverride) {
@@ -527,9 +413,9 @@ export async function getSignedUrlWithOverrides(
       // sending prompt: '' would wipe the base systemPrompt.
       const promptOverride: Record<string, unknown> = {};
       if (systemPromptOverride !== undefined) promptOverride.prompt = systemPromptOverride;
-      if (nested.llm?.model !== undefined) promptOverride.llm = nested.llm.model;
-      if (nested.llm?.temperature !== undefined) promptOverride.temperature = nested.llm.temperature;
-      if (nested.llm?.maxTokens !== undefined) promptOverride.max_tokens = nested.llm.maxTokens;
+      if (overrides.llm?.model !== undefined) promptOverride.llm = overrides.llm.model;
+      if (overrides.llm?.temperature !== undefined) promptOverride.temperature = overrides.llm.temperature;
+      if (overrides.llm?.maxTokens !== undefined) promptOverride.max_tokens = overrides.llm.maxTokens;
       agentOverride.prompt = promptOverride;
     }
     if (firstMessageOverride !== undefined) {
@@ -540,9 +426,9 @@ export async function getSignedUrlWithOverrides(
 
   // TTS overrides: voice_id, expressive_mode, suggested_audio_tags
   const ttsOverride: Record<string, unknown> = {};
-  if (nested.agent?.voiceId !== undefined) ttsOverride.voice_id = nested.agent.voiceId;
-  if (nested.tts?.expressiveMode !== undefined) ttsOverride.expressive_mode = nested.tts.expressiveMode;
-  const normalizedTags = normalizeAudioTags(nested.tts?.suggestedAudioTags);
+  if (overrides.agent?.voiceId !== undefined) ttsOverride.voice_id = overrides.agent.voiceId;
+  if (overrides.tts?.expressiveMode !== undefined) ttsOverride.expressive_mode = overrides.tts.expressiveMode;
+  const normalizedTags = normalizeAudioTags(overrides.tts?.suggestedAudioTags);
   if (normalizedTags) ttsOverride.suggested_audio_tags = normalizedTags;
   if (Object.keys(ttsOverride).length > 0) {
     conversationConfigOverride.tts = ttsOverride;
