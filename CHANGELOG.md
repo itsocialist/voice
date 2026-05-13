@@ -11,6 +11,49 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.4] — 2026-05-13
+
+### Summary
+
+Tiny prep release ahead of v0.4. Telegraphs the planned multi-backend
+ConvAI direction in the type system and README before the actual
+implementations land. Zero runtime change — every existing call site
+continues to behave identically.
+
+### Changed
+
+- **`ConvAIProviderId` widened** from `'elevenlabs'` to
+  `'elevenlabs' | 'hume' | 'cartesia-line' | 'openai-realtime'`. The
+  three new values are forward-looking — they reserve type-system slots
+  for the planned v0.4+ ConvAI backend implementations. Calling
+  `createConvAI({ backend: hume({...}) })` won't work yet (`hume()`
+  factory doesn't exist), but the `ConvAISessionHandle.backend` field
+  type now documents the trajectory and IDE autocomplete shows the
+  planned targets.
+
+  This is type-widening only — every existing v0.3.x usage stays valid.
+  Consumers narrowing on `handle.backend === 'elevenlabs'` continue to
+  work; the type just gives them more options to switch on later.
+
+### Added
+
+- **README provider table now lists Hume EVI 3** alongside Cartesia Line
+  and OpenAI Realtime in a "Planned multi-backend ConvAI (v0.4+)"
+  section. Documents which backend is the v0.4.0 anchor (Hume — strongest
+  fit for the stated human-likeness > latency > cost goal hierarchy) and
+  which are queued for v0.5+.
+
+### Notes
+
+  The Hume anchor for v0.4.0 is reversible — if SpeakerHero's needs shift
+  the priority axis (e.g., latency becomes #1, which would favor Cartesia
+  Line at ~40-90ms TTFA), the type slot is already in place to swap which
+  backend ships first. The decision is recorded in
+  `development/ship-plan-v0.3.0.core.md` (now at v3 in context-mesh) and
+  not locked into code anywhere yet.
+
+---
+
 ## [0.3.3] — 2026-05-13
 
 ### Summary
@@ -595,7 +638,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/itsocialist/voice/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/itsocialist/voice/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/itsocialist/voice/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/itsocialist/voice/compare/v0.3.0...v0.3.1

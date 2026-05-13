@@ -28,16 +28,30 @@ Every voice-enabled app reimplements the same plumbing: provider selection, fall
 
 ## Providers
 
+### Available today (v0.3.x)
+
 | Provider | Type | Real streaming | Requires env var |
 |---|---|---|---|
-| [ElevenLabs](https://elevenlabs.io) | TTS + ConvAI | ✅ Yes (`/stream` endpoint, ~75ms TTFA) | `ELEVENLABS_API_KEY` |
-| [Cartesia](https://cartesia.ai) | TTS | ❌ Buffered today (Sonic WebSocket planned for v0.4) | `CARTESIA_API_KEY` |
-| [Fish Audio](https://fish.audio) | TTS | ❌ Buffered today | `FISH_AUDIO_API_KEY` |
-| [OpenAI](https://platform.openai.com) | TTS | ❌ Buffered today | `OPENAI_API_KEY` |
-| [Deepgram](https://deepgram.com) | TTS + STT | ❌ Buffered today (WebSocket planned) | `DEEPGRAM_API_KEY` |
+| [ElevenLabs](https://elevenlabs.io) | TTS + ConvAI | ✅ Yes (`/stream`, ~75ms TTFA) | `ELEVENLABS_API_KEY` |
+| [Cartesia](https://cartesia.ai) | TTS (one-shot) | ❌ Buffered today (Sonic WebSocket planned v0.4) | `CARTESIA_API_KEY` |
+| [Fish Audio](https://fish.audio) | TTS (one-shot) | ❌ Buffered today | `FISH_AUDIO_API_KEY` |
+| [OpenAI](https://platform.openai.com) | TTS (one-shot) | ❌ Buffered today | `OPENAI_API_KEY` |
+| [Deepgram](https://deepgram.com) | TTS (one-shot) + STT (one-shot) | ❌ Buffered today (WebSocket planned) | `DEEPGRAM_API_KEY` |
 | Browser Web Speech | TTS + STT (client-side) | — (synchronous) | none |
 
 Real streaming means audio chunks arrive incrementally before full synthesis completes. Providers marked ❌ still work for streaming requests — the router wraps `synthesize()` output in a one-chunk stream and emits a loud warning, so consumers know they're not getting sub-second TTFA from those backends.
+
+### Planned multi-backend ConvAI (v0.4+)
+
+The `ConvAIBackend` interface shipped in v0.3.3 is implemented today by ElevenLabs only. Three more backends are targeted:
+
+| Provider | Status | Why it's a planned target |
+|---|---|---|
+| [Hume EVI 3](https://www.hume.ai) / Octave | v0.4.0 anchor | Empathic axis — beat GPT-4o on 8/9 emotions in blind tests; <300ms voice-to-voice. Strongest fit for sales-sim "buyer persona conveys real emotion" use cases. |
+| [Cartesia Line](https://cartesia.ai/agents) | v0.5.0 | Latency winner — Sonic-3.5 ~40-90ms TTFA; Line $0.06/min flat ConvAI. |
+| [OpenAI Realtime](https://platform.openai.com/docs/guides/realtime) (`gpt-realtime`) | v0.5.0 | Speech-to-speech single-model architecture + native MCP server support. Right pick when the agent needs heavy tool calling. |
+
+These appear in the `ConvAIProviderId` type union as forward-looking slots (v0.3.4+) so the type system documents the trajectory. Calling `createConvAI({ backend: hume({...}) })` is a v0.4 capability — the import doesn't exist yet.
 
 ---
 

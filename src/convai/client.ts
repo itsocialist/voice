@@ -43,8 +43,26 @@ export type ConvAIErrorType =
   | 'session_expired'         // signed URL or token expired
   | 'timeout';                // request exceeded timeoutMs
 
-/** Provider identifier for multi-backend dispatch. v0.3.x = ElevenLabs only. */
-export type ConvAIProviderId = 'elevenlabs';
+/**
+ * Provider identifier for multi-backend dispatch.
+ *
+ * v0.3.x ships only the `'elevenlabs'` implementation. The other values
+ * are forward-looking — they reserve the type-system slots for the
+ * `ConvAIBackend` implementations targeted at v0.4+:
+ *
+ *   - `'hume'` — Hume EVI 3 / Octave. Anchor backend for v0.4.0
+ *     (empathic axis: best emotion expression in blind tests,
+ *     <300ms voice-to-voice). Strongest fit for sales-sim use cases.
+ *   - `'cartesia-line'` — Cartesia Line. v0.5.0 candidate. Latency
+ *     winner (Sonic-3.5 ~40-90ms TTFA, Line $0.06/min flat).
+ *   - `'openai-realtime'` — OpenAI Realtime API (gpt-realtime).
+ *     v0.5.0 candidate. Speech-to-speech single model + native MCP.
+ *
+ * Type widening done in v0.3.4 to telegraph the trajectory; no runtime
+ * implementation exists for these values yet. Calling
+ * `createConvAI({ backend: hume({...}) })` won't work until v0.4.
+ */
+export type ConvAIProviderId = 'elevenlabs' | 'hume' | 'cartesia-line' | 'openai-realtime';
 
 /** Legacy code values from v0.2.x — preserved for backward compat. */
 export type ConvAILegacyCode =
