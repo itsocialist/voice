@@ -12,7 +12,7 @@
  *   export const { POST, GET } = createTTSHandler({ registry: myRegistry })
  */
 
-import { synthesizeSpeech, getProviderStatus } from '../src/router/tts';
+import { synthesizeSpeech, synthesizeSpeechStream, getProviderStatus } from '../src/router/tts';
 import { voiceRegistry } from '../src/profiles/registry';
 import type { VoiceRegistry } from '../src/profiles/registry';
 import type { TTSRouteBody, TTSProviderName } from '../src/types';
@@ -27,6 +27,12 @@ function json(data: unknown, init?: ResponseInit): Response {
 interface TTSHandlerOptions {
   /** Registry to use for profile lookup. Defaults to the global singleton. */
   registry?: VoiceRegistry;
+}
+
+/** True when the request opts into the streaming response path. */
+function isStreamRequested(request: Request): boolean {
+  const v = new URL(request.url).searchParams.get('stream');
+  return v === '1' || v === 'true';
 }
 
 export function createTTSHandler(options: TTSHandlerOptions = {}) {
@@ -54,6 +60,29 @@ export function createTTSHandler(options: TTSHandlerOptions = {}) {
       // Resolve voice profile: explicit > registry key > registry default
       const resolvedProfile =
         explicitProfile ?? (profileKey ? registry.resolve(profileKey) : registry.getDefault());
+
+      // Streaming path: ?stream=1 (or "true") on the request URL.
+      // Returns the audio stream directly as the response body. Provider
+      // metadata still surfaces via response headers.
+      const wantsStream = isStreamRequested(request);
+
+      if (wantsStream) {
+        const streamResult = await synthesizeSpeechStream({
+          text: text.trim(),
+          voiceProfile: resolvedProfile,
+          format: format ?? 'mp3',
+          preferredProvider: provider as TTSProviderName | undefined,
+        });
+        return new Response(streamResult.toReadableStream(), {
+          headers: {
+            'Content-Type': streamResult.contentType,
+            'Transfer-Encoding': 'chunked',
+            'X-TTS-Provider': streamResult.provider,
+            'X-Voice-Name': resolvedProfile.name,
+            'Cache-Control': 'no-store',
+          },
+        });
+      }
 
       const result = await synthesizeSpeech({
         text: text.trim(),
@@ -83,18 +112,12 @@ export function createTTSHandler(options: TTSHandlerOptions = {}) {
   }
 
   async function GET() {
-    try {
-      const status = getProviderStatus();
-      return new Response(JSON.stringify(status), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to get status';
-      return new Response(JSON.stringify({ error: message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    // v0.3.2+: getProviderStatus is non-throwing. Always returns 200
+    // even when no providers are configured (primary: null).
+    const status = getProviderStatus();
+    return new Response(JSON.stringify(status), {
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   return { POST, GET };

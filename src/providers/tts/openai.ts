@@ -24,7 +24,9 @@ export class OpenAITTSProvider implements TTSProvider {
       },
       body: JSON.stringify({
         model: 'tts-1',
-        voice: voiceProfile.openaiVoice,
+        // OpenAI voice ID is required by their API. Default to 'nova' when
+        // the profile didn't set one (v0.3.2+ — the field is now optional).
+        voice: voiceProfile.openaiVoice ?? 'nova',
         input: text,
         response_format: 'mp3',
         speed: 1.0,

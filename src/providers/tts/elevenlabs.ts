@@ -4,6 +4,12 @@ const ELEVENLABS_API_BASE = 'https://api.elevenlabs.io/v1';
 
 export class ElevenLabsProvider implements TTSProvider {
   name = 'elevenlabs' as const;
+  /**
+   * v0.3.2: ElevenLabs is the only TTS provider in voice-lib that does true
+   * incremental streaming — chunks arrive over chunked HTTP from
+   * `/v1/text-to-speech/{id}/stream` (Flash v2.5 inference, ~75ms TTFA).
+   */
+  supportsStreaming = true as const;
   private apiKey: string;
 
   constructor(apiKey?: string) {
@@ -19,7 +25,18 @@ export class ElevenLabsProvider implements TTSProvider {
     const { text, voiceProfile, format = 'mp3' } = request;
 
     const voiceId = voiceProfile.elevenlabsVoiceId;
-    const settings = voiceProfile.elevenlabsSettings;
+    if (!voiceId) {
+      throw new Error(
+        '[voice/tts] ElevenLabs provider selected but voiceProfile.elevenlabsVoiceId is missing. ' +
+        'Set the field on your VoiceProfile or route to a different provider.',
+      );
+    }
+    const settings = voiceProfile.elevenlabsSettings ?? {
+      stability: 0.5,
+      similarity_boost: 0.75,
+      style: 0.0,
+      use_speaker_boost: true,
+    };
 
     // eleven_v3 for dialog quality; turbo for long responses where latency matters
     const modelId = text.length > 800 ? 'eleven_turbo_v2_5' : 'eleven_v3';
@@ -77,7 +94,18 @@ export class ElevenLabsProvider implements TTSProvider {
     const { text, voiceProfile, format = 'mp3' } = request;
 
     const voiceId = voiceProfile.elevenlabsVoiceId;
-    const settings = voiceProfile.elevenlabsSettings;
+    if (!voiceId) {
+      throw new Error(
+        '[voice/tts/stream] ElevenLabs provider selected but voiceProfile.elevenlabsVoiceId is missing. ' +
+        'Set the field on your VoiceProfile or route to a different provider.',
+      );
+    }
+    const settings = voiceProfile.elevenlabsSettings ?? {
+      stability: 0.5,
+      similarity_boost: 0.75,
+      style: 0.0,
+      use_speaker_boost: true,
+    };
 
     // Flash v2.5: lowest latency model on the streaming endpoint
     // ~75ms TTFA vs ~2.3s for buffered synthesize()
@@ -115,10 +143,14 @@ export class ElevenLabsProvider implements TTSProvider {
       throw new Error('ElevenLabs TTS stream: response body is null');
     }
 
+    const stream = response.body;
     return {
-      stream: response.body,
+      // ReadableStream<Uint8Array> implements AsyncIterable in modern runtimes.
+      chunks: stream as unknown as AsyncIterable<Uint8Array>,
       contentType: `audio/${format === 'mp3' ? 'mpeg' : format}`,
       provider: 'elevenlabs',
+      toReadableStream: () => stream,
+      stream, // back-compat, deprecated
     };
   }
 }

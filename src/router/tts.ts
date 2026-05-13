@@ -7,7 +7,7 @@
  * in the TTSRequest — NOT by mutating process.env (which is unsafe under concurrency).
  */
 
-import type { TTSProvider, TTSProviderName, TTSRequest, TTSResponse, TTSProviderStatus } from '../types';
+import type { TTSProvider, TTSProviderName, TTSRequest, TTSResponse, TTSProviderStatus, TTSStreamResponse } from '../types';
 import { ElevenLabsProvider } from '../providers/tts/elevenlabs';
 import { FishAudioProvider } from '../providers/tts/fish-audio';
 import { OpenAITTSProvider } from '../providers/tts/openai';
@@ -36,10 +36,15 @@ function getProviders(): Map<TTSProviderName, TTSProvider> {
   return _providers;
 }
 
+/**
+ * Pick the primary provider given env + per-request preference. Returns
+ * null when no provider is available — callers decide how to handle that
+ * (synthesizeSpeech throws; getProviderStatus reports the null).
+ */
 function resolveProvider(
   providers: Map<TTSProviderName, TTSProvider>,
-  preferred?: TTSProviderName
-): TTSProviderName {
+  preferred?: TTSProviderName,
+): TTSProviderName | null {
   // 1. Explicit per-request preference
   if (preferred && providers.has(preferred)) return preferred;
 
@@ -52,8 +57,13 @@ function resolveProvider(
     if (providers.has(name)) return name;
   }
 
-  throw new Error(
-    'No TTS provider available. Set ELEVENLABS_API_KEY, FISH_AUDIO_API_KEY, or OPENAI_API_KEY.'
+  return null;
+}
+
+function noProvidersError(): Error {
+  return new Error(
+    'No TTS provider available. Set ELEVENLABS_API_KEY, CARTESIA_API_KEY, ' +
+    'DEEPGRAM_API_KEY, FISH_AUDIO_API_KEY, or OPENAI_API_KEY.',
   );
 }
 
@@ -66,6 +76,7 @@ function resolveProvider(
 export async function synthesizeSpeech(request: TTSRequest): Promise<TTSResponse> {
   const providers = getProviders();
   const primaryName = resolveProvider(providers, request.preferredProvider as TTSProviderName | undefined);
+  if (!primaryName) throw noProvidersError();
   const fallbacks = FALLBACK_ORDER.filter(
     (name) => name !== primaryName && providers.has(name)
   );
@@ -102,9 +113,24 @@ export async function synthesizeSpeech(request: TTSRequest): Promise<TTSResponse
  * Synthesize speech as a stream with automatic fallback.
  * Falls back to buffered synthesis if the provider doesn't support streaming natively.
  */
-export async function synthesizeSpeechStream(request: TTSRequest): Promise<import('../types').TTSStreamResponse> {
+/**
+ * Synthesize speech as a stream with automatic fallback.
+ *
+ * Behaviour in v0.3.2:
+ * - Providers with `supportsStreaming: true` AND a `synthesizeStream`
+ *   method are used for true incremental delivery. ElevenLabs is the
+ *   only such provider today.
+ * - Other providers fall back to wrapping their `synthesize()` output
+ *   in a single-chunk ReadableStream. The router emits a loud warning
+ *   when this happens — the consumer asked to stream but the chosen
+ *   provider can't, so they should know.
+ * - Use `getProviderStatus().available` to check which providers are
+ *   configured up front if you need to gate streaming on real support.
+ */
+export async function synthesizeSpeechStream(request: TTSRequest): Promise<TTSStreamResponse> {
   const providers = getProviders();
   const primaryName = resolveProvider(providers, request.preferredProvider as TTSProviderName | undefined);
+  if (!primaryName) throw noProvidersError();
   const fallbacks = FALLBACK_ORDER.filter(
     (name) => name !== primaryName && providers.has(name)
   );
@@ -117,34 +143,35 @@ export async function synthesizeSpeechStream(request: TTSRequest): Promise<impor
     if (!provider) continue;
 
     try {
-      if (provider.synthesizeStream) {
+      const hasRealStream = provider.synthesizeStream && provider.supportsStreaming === true;
+      if (hasRealStream && provider.synthesizeStream) {
         const result = await provider.synthesizeStream(request);
         if (providerName !== primaryName) {
-          console.warn(`[voice] Primary '${primaryName}' failed. Fell back to streaming '${providerName}'.`);
+          console.warn(`[voice/tts/stream] Primary '${primaryName}' failed. Fell back to streaming '${providerName}'.`);
         } else {
           console.log(`[voice/tts/stream] ${providerName} — streaming initiated`);
         }
         return result;
-      } else {
-        // Fallback: provider doesn't natively stream, synthesize and wrap ArrayBuffer in stream
-        const result = await provider.synthesize(request);
-        const stream = new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(new Uint8Array(result.audioBuffer));
-            controller.close();
-          }
-        });
-        if (providerName !== primaryName) {
-          console.warn(`[voice] Primary '${primaryName}' failed. Fell back to buffered '${providerName}'.`);
-        } else {
-          console.log(`[voice/tts/stream] ${providerName} — buffered fallback initiated`);
-        }
-        return {
-          stream,
-          contentType: result.contentType,
-          provider: providerName,
-        };
       }
+
+      // Buffered fallback: this provider doesn't actually stream. We honour
+      // the caller's synthesizeSpeechStream() request by wrapping synthesize()
+      // output in a one-chunk ReadableStream, but we warn loudly so they
+      // know they're not getting real incremental delivery. Same fallback
+      // behaviour as v0.2.x but with honest logging.
+      const result = await provider.synthesize(request);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(result.audioBuffer));
+          controller.close();
+        },
+      });
+      console.warn(
+        `[voice/tts/stream] '${providerName}' does not support real streaming — ` +
+        `wrapping buffered synthesize() output in a one-chunk stream. ` +
+        `For sub-second TTFA, route to a provider with supportsStreaming: true (e.g. ElevenLabs).`,
+      );
+      return makeStreamResponse(stream, result.contentType, providerName);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.error(`[voice/tts/stream] ${providerName} failed:`, lastError.message);
@@ -154,13 +181,39 @@ export async function synthesizeSpeechStream(request: TTSRequest): Promise<impor
   throw lastError ?? new Error('All TTS providers failed to stream');
 }
 
+/**
+ * Build a TTSStreamResponse from a ReadableStream — exposes both the
+ * canonical `chunks` (AsyncIterable) and `toReadableStream()` shape plus
+ * the legacy `stream` field for back-compat.
+ */
+function makeStreamResponse(
+  stream: ReadableStream<Uint8Array>,
+  contentType: string,
+  provider: TTSProviderName,
+): TTSStreamResponse {
+  return {
+    chunks: stream as unknown as AsyncIterable<Uint8Array>,
+    contentType,
+    provider,
+    toReadableStream: () => stream,
+    stream,
+  };
+}
+
+/**
+ * Returns provider availability without throwing. `primary` is `null` when
+ * no provider is configured (v0.3.2 behaviour change — v0.2.x threw).
+ * Safe to call as a health check from any route.
+ */
 export function getProviderStatus(): TTSProviderStatus {
   const providers = getProviders();
   const primary = resolveProvider(providers);
   return {
     primary,
     available: Array.from(providers.keys()),
-    fallbacks: FALLBACK_ORDER.filter((n) => n !== primary && providers.has(n)),
+    fallbacks: primary
+      ? FALLBACK_ORDER.filter((n) => n !== primary && providers.has(n))
+      : [],
   };
 }
 

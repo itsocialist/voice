@@ -5,6 +5,96 @@ For the additive changes that ride alongside, see [CHANGELOG.md](./CHANGELOG.md)
 
 ---
 
+## v0.3.2 — 2026-05-12
+
+Workstream B slice 2. Two technically-breaking changes; the rest of the
+release is additive widening and behaviour fixes.
+
+### 1. `synthesizeStream` removed from Cartesia + Deepgram providers
+
+**What changed**
+
+Both providers' `synthesizeStream` methods hit the same buffered endpoints
+as `synthesize()` (`/tts/bytes`, `/v1/speak`) and returned the response
+body. They gave the appearance of streaming without incremental delivery.
+
+In v0.3.2 those methods are removed. The router still honors
+`synthesizeSpeechStream` calls — if the selected provider doesn't support
+real streaming, it falls back to wrapping `synthesize()` in a one-chunk
+ReadableStream and emits a loud `console.warn`. So the *outcome* is
+unchanged for consumers using `synthesizeSpeechStream`, but the
+*honesty* about whether you're streaming improves.
+
+**What you need to do**
+
+Nothing if you only ever called `synthesizeSpeechStream` (the router). If
+you reached into `CartesiaProvider.synthesizeStream` or
+`DeepgramTTSProvider.synthesizeStream` directly, those methods no longer
+exist — call `synthesizeSpeechStream` instead, or call the provider's
+`synthesize()` and handle the ArrayBuffer yourself.
+
+### 2. `TTSProviderStatus.primary` widened to `TTSProviderName | null`
+
+**What changed**
+
+`getProviderStatus()` used to throw when no provider was configured.
+v0.3.2+ returns `{ primary: null, available: [], fallbacks: [] }`.
+
+**What you need to do**
+
+Update any code reading `status.primary` to handle the `null` case:
+
+```diff
+  const status = getProviderStatus();
+- console.log(`Using ${status.primary}`);
++ console.log(`Using ${status.primary ?? 'none configured'}`);
+```
+
+Code that depended on the throw for control flow needs the equivalent
+null-check.
+
+### 3. `VoiceProfile` per-provider ID fields widened to optional (non-breaking)
+
+**What changed**
+
+`elevenlabsVoiceId`, `fishModelId`, `openaiVoice`, `elevenlabsSettings`,
+`fishSettings`, `gender`, `ageRange` are all now `?:` optional. v0.2.x
+typed them as required. This is a *widening* — existing profiles still
+satisfy the new type — but if you cast `VoiceProfile` somewhere or relied
+on exhaustiveness checks, you may see new "possibly undefined" lint flags.
+
+**What you need to do**
+
+Either keep your profiles complete (no change required) or trim them
+down to only the providers you target. If you route to a provider whose
+required ID is missing on the profile, the provider throws a clear
+error message pointing at the missing field.
+
+### 4. `TTSStreamResponse.stream` deprecated (one-cycle back-compat)
+
+**What changed**
+
+The canonical streaming shape is now `chunks: AsyncIterable<Uint8Array>`
+plus a `toReadableStream()` adapter. The legacy `stream` field
+(`ReadableStream<Uint8Array>`) is still populated for v0.3.x but will
+be removed in v0.4.0.
+
+**What you need to do**
+
+If you read `result.stream` directly, migrate to either form depending
+on context:
+
+```diff
+- new Response(result.stream, { headers: { 'Content-Type': result.contentType } })
++ new Response(result.toReadableStream(), { headers: { 'Content-Type': result.contentType } })
+
+  // Or compose with for-await:
+- for await (const chunk of result.stream) { ... }
++ for await (const chunk of result.chunks) { ... }
+```
+
+---
+
 ## v0.3.1 — 2026-05-12
 
 Workstream B surface-cleanup, slice 1. Three breakages bundled with

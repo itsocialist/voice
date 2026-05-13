@@ -11,31 +11,42 @@ export type STTProviderName = 'webspeech' | 'deepgram';
 // Maps a single voice identity across all TTS providers.
 // Apps define their own profiles and register them via VoiceRegistry.
 
+/**
+ * Voice profile — maps a single voice identity across TTS providers.
+ *
+ * v0.3.2 widened the type: previously the `elevenlabsVoiceId`, `fishModelId`,
+ * and `openaiVoice` fields (and the corresponding `elevenlabsSettings` /
+ * `fishSettings`) were all required. You couldn't register a profile that
+ * only targeted Cartesia without supplying placeholder ElevenLabs/Fish/OpenAI
+ * data. Those fields are now optional. If you route a request to a provider
+ * whose ID is missing on the profile, the router logs a warning and the
+ * provider falls back to a default voice — not silent fallback.
+ */
 export interface VoiceProfile {
   /** Human-readable name (e.g. "Warm Female Professional") */
   name: string;
 
-  // Provider-specific voice IDs
-  elevenlabsVoiceId: string;
-  fishModelId: string;
-  openaiVoice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+  // Provider-specific voice IDs (all optional from v0.3.2+)
+  elevenlabsVoiceId?: string;
+  fishModelId?: string;
+  openaiVoice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
   cartesiaVoiceId?: string;
   deepgramVoiceId?: string;
 
   // Metadata
-  gender: 'male' | 'female';
-  ageRange: 'young' | 'middle' | 'senior';
+  gender?: 'male' | 'female';
+  ageRange?: 'young' | 'middle' | 'senior';
   /** Description of voice style/personality for reference */
   style?: string;
 
-  // Per-provider tuning
-  elevenlabsSettings: {
+  // Per-provider tuning (all optional from v0.3.2+)
+  elevenlabsSettings?: {
     stability: number;          // 0.0–1.0: lower = more expressive
     similarity_boost: number;   // 0.0–1.0: higher = more faithful to voice
     style: number;              // 0.0–1.0: higher = more dramatic
     use_speaker_boost: boolean;
   };
-  fishSettings: {
+  fishSettings?: {
     temperature: number;        // 0.0–1.0: expressiveness
     top_p: number;              // 0.0–1.0: diversity
     speed: number;              // 0.5–2.0
@@ -63,11 +74,30 @@ export interface TTSResponse {
   latencyMs: number;
 }
 
-/** Returned by synthesizeStream() — stream starts before full synthesis */
+/**
+ * Returned by `synthesizeSpeechStream()`. Stream begins arriving before
+ * full synthesis completes (assuming the provider supports real streaming).
+ *
+ * v0.3.2+: `chunks` (AsyncIterable) is the canonical shape; use
+ * `for await (const chunk of result.chunks) {...}`. `toReadableStream()`
+ * adapts to a Web ReadableStream for Response bodies. The legacy `stream`
+ * field is preserved for back-compat and will be removed in v0.4.0.
+ */
 export interface TTSStreamResponse {
-  stream: ReadableStream<Uint8Array>;
+  /**
+   * AsyncIterable of audio chunks (canonical from v0.3.2+).
+   * Modern runtimes implement AsyncIterable on ReadableStream, so this
+   * is the same underlying object as `stream` — just typed for composability.
+   */
+  chunks: AsyncIterable<Uint8Array>;
   contentType: string;
   provider: TTSProviderName;
+  /** Adapter when you need a Web ReadableStream (e.g. for `new Response(stream)`). */
+  toReadableStream(): ReadableStream<Uint8Array>;
+  /**
+   * @deprecated use `chunks` or `toReadableStream()` — removed in v0.4.0.
+   */
+  stream: ReadableStream<Uint8Array>;
 }
 
 /** Returned when preferredProvider === 'browser' */
@@ -79,8 +109,26 @@ export interface BrowserTTSSignal {
 export interface TTSProvider {
   name: TTSProviderName;
   synthesize(request: TTSRequest): Promise<TTSResponse>;
-  /** Optional: stream audio chunks as they arrive (lower TTFA) */
+  /**
+   * Stream audio chunks as they arrive (lower TTFA). Only implemented by
+   * providers that actually do incremental delivery — see `supportsStreaming`
+   * for the truth-flag the router honors.
+   */
   synthesizeStream?(request: TTSRequest): Promise<TTSStreamResponse>;
+  /**
+   * Whether this provider's `synthesizeStream` actually streams chunks as
+   * they generate (`true`) versus buffering server-side and emitting a
+   * single chunk at the end (`false` or `undefined`).
+   *
+   * The router uses this to decide whether to (a) call `synthesizeStream`
+   * directly or (b) fall back to wrapping `synthesize()` output in a
+   * one-chunk stream and emit a clear "not actually streaming" warning.
+   *
+   * As of v0.3.2: ElevenLabs (`true`) is the only TTS provider with real
+   * incremental streaming. Cartesia + Deepgram require their WebSocket
+   * endpoints for true streaming — not yet implemented here.
+   */
+  supportsStreaming?: boolean;
   isAvailable(): boolean;
 }
 
@@ -109,7 +157,12 @@ export interface STTProvider {
 // ── Provider Status ──
 
 export interface TTSProviderStatus {
-  primary: TTSProviderName;
+  /**
+   * The provider that would be selected for an unspecified request given
+   * current env config. `null` when no provider is available — v0.3.2+
+   * change; v0.2.x threw on this path.
+   */
+  primary: TTSProviderName | null;
   available: TTSProviderName[];
   fallbacks: TTSProviderName[];
 }

@@ -11,6 +11,83 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.3.2] — 2026-05-12
+
+### Summary
+
+Workstream B slice 2 — finishes the surface-cleanup work started in v0.3.1.
+Five changes bundled, all with one-cycle backward compat or non-breaking
+widening. Closes the consultant-flagged "fake streaming" critique (the
+router and Cartesia/Deepgram providers no longer pretend to stream when
+they don't) and unlocks fully-configured profiles that target only a
+subset of providers.
+
+The remaining consultant-flagged Workstream B item — barge-in /
+interruption API on `useConversation` — defers to v0.3.3, which will
+also begin Workstream C (multi-backend ConvAI abstraction skeleton).
+
+### Added
+
+- **`supportsStreaming?: boolean` on `TTSProvider`** — truth-flag the
+  router honors. ElevenLabs is the only provider with real incremental
+  streaming today (`supportsStreaming: true`). Cartesia, Deepgram, Fish,
+  OpenAI are `false` until their WebSocket/SSE endpoints get wired up.
+
+- **`TTSStreamResponse.chunks: AsyncIterable<Uint8Array>`** — canonical
+  streaming shape from v0.3.2+. Compose with `for await (const chunk of
+  result.chunks)`. Modern runtimes implement AsyncIterable on
+  ReadableStream, so this is the same underlying object — just typed
+  for composability across SDKs (Anthropic / OpenAI / Vercel AI all use
+  AsyncIterable as canonical).
+
+- **`TTSStreamResponse.toReadableStream()`** — adapter when you need a
+  Web ReadableStream (e.g. for `new Response(stream)`).
+
+- **`/api/tts?stream=1`** — Next handler now reachable for streaming.
+  Returns the audio stream directly as the response body with
+  `Transfer-Encoding: chunked`. Headers expose `X-TTS-Provider` and
+  `X-Voice-Name`. Without `stream=1`, the buffered path is unchanged.
+
+### Changed
+
+- **`getProviderStatus()` no longer throws** when no providers are
+  configured. Returns `{ primary: null, available: [], fallbacks: [] }`.
+  Safe to call from health-check routes. The Next `GET /api/tts`
+  handler always returns HTTP 200 with the status JSON.
+
+- **`VoiceProfile` provider fields widened to optional**: `elevenlabsVoiceId`,
+  `fishModelId`, `openaiVoice`, `elevenlabsSettings`, `fishSettings`,
+  `gender`, `ageRange`. You can now register a profile that only targets
+  one provider (e.g. Cartesia-only) without filling in placeholder data
+  for the rest. If you route a request to a provider whose required ID
+  is missing on the profile, the provider throws a clear error message
+  pointing at the missing field. Defaults applied where reasonable
+  (e.g. OpenAI falls back to `'nova'` voice when `openaiVoice` is unset).
+
+- **`TTSProviderStatus.primary` is now `TTSProviderName | null`** — was
+  required `TTSProviderName` in v0.2.x/v0.3.0. Updates any code reading
+  `status.primary` and assuming non-null.
+
+### Removed
+
+- **`synthesizeStream` removed from Cartesia and Deepgram providers**.
+  The previous implementations hit the same buffered endpoints as
+  `synthesize()` (`/tts/bytes`, `/v1/speak`) and returned the response
+  body — which gave the appearance of streaming without incremental
+  delivery. Real Cartesia + Deepgram streaming requires their WebSocket
+  endpoints, deferred to a future release. When `synthesizeSpeechStream`
+  is called and the chosen provider doesn't support real streaming, the
+  router falls back to wrapping `synthesize()` output in a one-chunk
+  ReadableStream and emits a loud warning so consumers know they're not
+  getting sub-second TTFA.
+
+### Deprecated (one-cycle back-compat, removed in v0.4.0)
+
+- **`TTSStreamResponse.stream`** — use `chunks` (AsyncIterable) or
+  `toReadableStream()` instead. Still populated in v0.3.x.
+
+---
+
 ## [0.3.1] — 2026-05-12
 
 ### Summary
@@ -453,7 +530,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/itsocialist/voice/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/itsocialist/voice/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/itsocialist/voice/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/itsocialist/voice/compare/v0.2.3...v0.2.4

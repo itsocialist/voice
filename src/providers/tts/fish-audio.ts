@@ -17,7 +17,18 @@ export class FishAudioProvider implements TTSProvider {
   async synthesize(request: TTSRequest): Promise<TTSResponse> {
     const startTime = Date.now();
     const { text, voiceProfile, format = 'mp3' } = request;
-    const settings = voiceProfile.fishSettings;
+    if (!voiceProfile.fishModelId) {
+      throw new Error(
+        '[voice/tts] Fish Audio provider selected but voiceProfile.fishModelId is missing. ' +
+        'Set the field on your VoiceProfile or route to a different provider.',
+      );
+    }
+    // Defaults when the profile doesn't carry per-provider tuning (v0.3.2+).
+    const settings = voiceProfile.fishSettings ?? {
+      temperature: 0.7,
+      top_p: 0.8,
+      speed: 1.0,
+    };
 
     const response = await fetch(`${FISH_API_BASE}/tts`, {
       method: 'POST',
