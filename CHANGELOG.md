@@ -11,6 +11,96 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.4.2] — 2026-05-13
+
+### Summary
+
+FFT visualization helpers + components. Filed in response to SpeakerHero's
+2026-05-13 ask (`development/requests/speakerhero-2026-05-13-fft-viz.md`).
+The raw `getInputByteFrequencyData` / `getOutputByteFrequencyData` primitives
+exposed since v0.1.0 were too low-level for app authors to wire into a
+waveform UI without painful manual rAF + canvas plumbing. This release adds
+both layers the request proposed: normalized helper hooks and drop-in
+components.
+
+Fully additive — no breaking changes. SpeakerHero on `^0.4.0` auto-picks
+this up.
+
+### Added
+
+**FFT visualization hooks** in `@itsocialist/voice/react`:
+
+- **`useInputLevel(conv, { smoothing? })`** — 0–1 RMS volume scalar of the
+  microphone input. Replaces the binary 0/1 `agentVolume` quirk for "is
+  the user speaking" UI. Exponentially smoothed across rAF frames
+  (default smoothing 0.7).
+
+- **`useOutputLevel(conv, { smoothing? })`** — same for the agent's audio
+  output. Useful for "agent is currently speaking" indicators.
+
+- **`useInputBands(conv, count, { smoothing? })`** — Float32Array of N
+  log-spaced frequency band magnitudes (0–1 normalized) across the
+  100Hz–8kHz human-voice range. For bar-chart / equalizer-style UIs.
+
+- **`useOutputBands(conv, count, { smoothing? })`** — same for the agent's
+  audio output.
+
+Each hook drives its own `requestAnimationFrame` loop only while mounted.
+Buffers are pre-allocated and reused; only the band snapshot allocates a
+fresh Float32Array per frame (so React sees a new identity for re-render).
+
+**Drop-in components** in `@itsocialist/voice/react`:
+
+- **`<VoiceWaveform conv source bands={24} barColor gapPx minHeightPx />`** —
+  log-spaced bar visualizer. Renders plain `<div>` bars with CSS height
+  transforms (no canvas; simpler API, good enough for ~24 bands at 60fps).
+  Drop in next to any `useConversation` / `useVoiceDuplex` result.
+
+- **`<VoiceMeter conv source variant fillColor trackColor />`** —
+  single-value volume meter. Default horizontal; pass `variant="vertical"`
+  for vertical. Accessible: `role="meter"` with `aria-valuenow` reflecting
+  the current level.
+
+### Usage
+
+```tsx
+import { useConversation, VoiceWaveform, VoiceMeter, useInputLevel } from '@itsocialist/voice/react';
+
+function CoachUI() {
+  const conv = useConversation({ buildConfig: ... });
+  const userLevel = useInputLevel(conv); // 0–1, smoothed
+
+  return (
+    <>
+      <button onClick={conv.start}>Start</button>
+
+      {/* Agent audio bars */}
+      <VoiceWaveform conv={conv} source="output" bands={24} barColor="#0af" />
+
+      {/* User mic level meter */}
+      <VoiceMeter conv={conv} source="input" />
+
+      {/* Or use the helper hook directly */}
+      <p>Talking: {userLevel > 0.05 ? 'yes' : 'no'}</p>
+    </>
+  );
+}
+```
+
+### Internal notes
+
+The log-spaced band aggregation uses an exponential bin distribution
+(`exp(logMin + (i/N) * (logMax - logMin))`) — adjacent bands have similar
+perceptual loudness contrast, which is what human ears actually resolve.
+A linear-frequency variant could be added later via an option, but log is
+the default people want for voice visualization.
+
+Components intentionally render plain `<div>` rather than canvas. For
+higher-performance use (hundreds of bands, smooth 60fps animation), drop
+to `useInputBands` directly and render to your own canvas.
+
+---
+
 ## [0.4.1] — 2026-05-13
 
 ### Summary
@@ -783,7 +873,8 @@ Initial public release.
 - **ElevenLabs React SDK v1.x integration** — `ConversationProvider` context via `VoiceDuplexProvider`
 - TypeScript types throughout; no runtime dependencies beyond `@elevenlabs/react` and `@elevenlabs/client`
 
-[Unreleased]: https://github.com/itsocialist/voice/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/itsocialist/voice/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/itsocialist/voice/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/itsocialist/voice/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/itsocialist/voice/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/itsocialist/voice/compare/v0.3.3...v0.3.4

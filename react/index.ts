@@ -13,6 +13,14 @@ export type { UseConversationOptions, UseConversationResult, ConversationStatus,
 export { useVoiceDuplex } from './hooks/useVoiceDuplex';
 export type { UseVoiceDuplexOptions, UseVoiceDuplexResult, VoiceDuplexProviderName, MicPermissionState as VoiceDuplexMicPermission } from './hooks/useVoiceDuplex';
 
+// v0.4.2: visualization helpers — turn raw byte-frequency data into UI-ready signals.
+export {
+  useInputLevel,
+  useOutputLevel,
+  useInputBands,
+  useOutputBands,
+} from './hooks/useVoiceLevel';
+
 // Components
 export { VoiceDuplexProvider } from './components/VoiceDuplexProvider';
 
@@ -21,3 +29,10 @@ export type { AudioPlayerProps } from './components/AudioPlayer';
 
 export { VoiceInput } from './components/VoiceInput';
 export type { VoiceInputProps } from './components/VoiceInput';
+
+// v0.4.2: drop-in visualization components — built on the FFT helper hooks above.
+export { VoiceWaveform } from './components/VoiceWaveform';
+export type { VoiceWaveformProps } from './components/VoiceWaveform';
+
+export { VoiceMeter } from './components/VoiceMeter';
+export type { VoiceMeterProps } from './components/VoiceMeter';

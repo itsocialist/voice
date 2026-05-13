@@ -491,7 +491,7 @@ Then:
 ## Known limitations
 
 - **Cartesia / Deepgram TTS streaming** — buffered today. WebSocket endpoints planned for v0.4. `supportsStreaming: false` on these providers.
-- **`agentVolume`** returns 0 / 1 only. For real frequency visualization, use `conv.getInputByteFrequencyData()` / `getOutputByteFrequencyData()` directly. First-class FFT helpers + `<VoiceWaveform>` component planned for v0.4 (see `development/requests/speakerhero-2026-05-13-fft-viz.md`).
+- **`agentVolume`** returns 0 / 1 only — a legacy quirk of the underlying SDK. Use the v0.4.2 visualization hooks (`useInputLevel`, `useOutputLevel`, `useInputBands`, `useOutputBands`) or drop-in components (`<VoiceWaveform>`, `<VoiceMeter>`) for real frequency-band UIs.
 - **Auto-reconnect on transient WebRTC drops** — not yet implemented (RQ-10). Sessions die silently on network blips. Planned for v0.4.
 - **Multi-backend ConvAI** — ElevenLabs is the only ConvAI backend today. Provider-neutral abstraction (`createConvAI({ backend: ... })`) lands in v0.3.3 with the same `elevenlabs` impl behind it. Hume EVI 3 / Cartesia Line / OpenAI Realtime targeted for v0.4–v0.5.
 
